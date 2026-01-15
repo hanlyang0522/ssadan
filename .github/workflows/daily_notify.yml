@@ -25,8 +25,10 @@ jobs:
         pip install -r requirements.txt
     
     - name: Validate Mattermost Webhook URL
+      env:
+        WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
       run: |
-        if [ -z "${{ secrets.MATTERMOST_WEBHOOK_URL }}" ]; then
+        if [ -z "$WEBHOOK_URL" ]; then
           echo "❌ 오류: MATTERMOST_WEBHOOK_URL secret이 설정되지 않았습니다."
           echo ""
           echo "다음 단계를 수행하세요:"
