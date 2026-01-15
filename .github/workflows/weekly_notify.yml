@@ -30,6 +30,25 @@ jobs:
       run: |
         pip install -r requirements.txt
     
+    - name: Validate Mattermost Webhook URL
+      run: |
+        if [ -z "${{ secrets.MATTERMOST_WEBHOOK_URL }}" ]; then
+          echo "❌ 오류: MATTERMOST_WEBHOOK_URL secret이 설정되지 않았습니다."
+          echo ""
+          echo "다음 단계를 수행하세요:"
+          echo "1. GitHub Repository Settings로 이동"
+          echo "2. Secrets and variables > Actions 선택"
+          echo "3. 'New repository secret' 클릭"
+          echo "4. Name: MATTERMOST_WEBHOOK_URL"
+          echo "5. Value: Mattermost Webhook URL 입력"
+          echo "6. 'Add secret' 클릭"
+          echo ""
+          echo "자세한 내용은 README.md 파일을 참조하세요."
+          exit 1
+        else
+          echo "✅ MATTERMOST_WEBHOOK_URL이 설정되어 있습니다."
+        fi
+    
     - name: Process image and send weekly menu
       env:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
