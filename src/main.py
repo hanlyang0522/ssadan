@@ -87,6 +87,15 @@ def notify_weekly(date: str = None, db_path: str = "db") -> bool:
     except ValueError as e:
         print(f"✗ 설정 오류: {str(e)}")
         return False
+    except FileNotFoundError as e:
+        print(f"✗ 파일을 찾을 수 없습니다: {str(e)}")
+        return False
+    except UnicodeDecodeError as e:
+        print(f"✗ 파일 인코딩 오류: {str(e)}")
+        return False
+    except PermissionError as e:
+        print(f"✗ 파일 접근 권한 오류: {str(e)}")
+        return False
     except Exception as e:
         print(f"✗ 파일 읽기 오류: {str(e)}")
         return False

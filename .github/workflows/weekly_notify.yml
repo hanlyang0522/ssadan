@@ -51,7 +51,7 @@ jobs:
         git config --local user.name "github-actions[bot]"
         
         # db/ 디렉토리의 .md 파일이 있는지 확인
-        if ls db/*.md 1> /dev/null 2>&1; then
+        if find db -name '*.md' -type f | grep -q .; then
           git add db/*.md
           git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
           git push
@@ -106,5 +106,5 @@ jobs:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
       run: |
         cd src
-        # 오늘 날짜로 파일 찾기 (기본값)
+        # notify 명령은 기본적으로 오늘 날짜(YYYY-MM-DD)의 파일을 찾습니다
         python main.py notify --db ../db
