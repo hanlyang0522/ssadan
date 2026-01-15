@@ -4,7 +4,7 @@ OCR Processor - 이미지에서 식단을 추출하여 Markdown 테이블로 변
 import pytesseract
 from PIL import Image
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import os
 
@@ -153,7 +153,7 @@ class OCRProcessor:
         print(f"Markdown 파일 저장 완료: {file_path}")
         return file_path
     
-    def process_and_save(self, db_path: str = "db") -> tuple[str, str]:
+    def process_and_save(self, db_path: str = "db") -> Tuple[str, str]:
         """
         이미지 처리 및 저장 통합 메서드
         
