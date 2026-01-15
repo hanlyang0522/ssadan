@@ -7,9 +7,19 @@ on:
         description: '식단표 이미지 경로'
         required: true
         default: 'meal_schedule.jpg'
+      step:
+        description: '실행할 단계 (ocr: OCR 처리만, notify: 전송만)'
+        required: true
+        default: 'ocr'
+        type: choice
+        options:
+          - ocr
+          - notify
 
 jobs:
-  process-and-notify:
+  ocr-process:
+    # OCR 처리 및 Markdown 저장 (웹훅 전송 없음)
+    if: github.event.inputs.step == 'ocr'
     runs-on: ubuntu-latest
     
     steps:
@@ -25,6 +35,46 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y tesseract-ocr tesseract-ocr-kor
+    
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Process image with OCR and save to db/
+      run: |
+        cd src
+        python main.py ocr --image ../${{ github.event.inputs.image_path }} --db ../db
+    
+    - name: Commit and push generated markdown files
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # db/ 디렉토리의 .md 파일이 있는지 확인
+        if ls db/*.md 1> /dev/null 2>&1; then
+          git add db/*.md
+          git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
+          git push
+          echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
+        else
+          echo "⚠️ db/ 디렉토리에 .md 파일이 없습니다."
+          echo "OCR 처리가 실패했거나 파일 생성에 문제가 있을 수 있습니다."
+          exit 1
+        fi
+  
+  notify-weekly:
+    # 저장된 Markdown 파일로 웹훅 전송
+    if: github.event.inputs.step == 'notify'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
     
     - name: Install Python dependencies
       run: |
@@ -51,17 +101,10 @@ jobs:
           echo "✅ MATTERMOST_WEBHOOK_URL이 설정되어 있습니다."
         fi
     
-    - name: Process image and send weekly menu
+    - name: Send weekly menu notification
       env:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
       run: |
         cd src
-        python main.py process --image ../${{ github.event.inputs.image_path }}
-    
-    - name: Commit and push generated markdown files
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add db/*.md
-        git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
-        git push
+        # 오늘 날짜로 파일 찾기 (기본값)
+        python main.py notify --db ../db
