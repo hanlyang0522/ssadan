@@ -3,6 +3,7 @@ Mattermost Sender - Mattermost 웹훅으로 메시지 전송
 """
 import requests
 import os
+import time
 from typing import Optional
 from datetime import datetime
 
@@ -20,40 +21,56 @@ class MattermostSender:
         if not self.webhook_url:
             raise ValueError("MATTERMOST_WEBHOOK_URL이 설정되지 않았습니다.")
     
-    def send_message(self, text: str, username: str = "식단봇") -> bool:
+    def send_message(self, text: str, username: str = "식단봇", max_retries: int = 3) -> bool:
         """
-        Mattermost로 메시지 전송
+        Mattermost로 메시지 전송 (재시도 로직 포함)
         
         Args:
             text: 전송할 메시지 내용 (Markdown 형식 지원)
             username: 봇 이름
+            max_retries: 최대 재시도 횟수
         
         Returns:
             성공 여부
         """
-        try:
-            payload = {
-                "text": text,
-                "username": username
-            }
+        payload = {
+            "text": text,
+            "username": username
+        }
+        
+        for attempt in range(max_retries):
+            try:
+                # GitHub Actions 환경에서 안정적인 30초 타임아웃 사용
+                response = requests.post(
+                    self.webhook_url,
+                    json=payload,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    print(f"✓ Mattermost 메시지 전송 성공")
+                    return True
+                else:
+                    print(f"✗ Mattermost 메시지 전송 실패: {response.status_code}")
+                    print(f"  응답: {response.text}")
+                    return False
             
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                timeout=10
-            )
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 지수 백오프: 1초, 2초, 4초
+                    print(f"⚠️  타임아웃 발생 (시도 {attempt + 1}/{max_retries}): {str(e)}")
+                    print(f"   {wait_time}초 후 재시도...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"✗ 네트워크 오류: {str(e)}")
+                    print(f"   {max_retries}번 시도 후에도 실패했습니다.")
+                    return False
             
-            if response.status_code == 200:
-                print(f"✓ Mattermost 메시지 전송 성공")
-                return True
-            else:
-                print(f"✗ Mattermost 메시지 전송 실패: {response.status_code}")
-                print(f"  응답: {response.text}")
+            except requests.exceptions.RequestException as e:
+                print(f"✗ 네트워크 오류: {str(e)}")
                 return False
         
-        except requests.exceptions.RequestException as e:
-            print(f"✗ 네트워크 오류: {str(e)}")
-            return False
+        return False
     
     def send_weekly_menu(self, markdown_content: str) -> bool:
         """
