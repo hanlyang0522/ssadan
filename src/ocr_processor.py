@@ -169,8 +169,13 @@ class OCRProcessor:
         # 2. Markdown 변환
         markdown = self.convert_to_markdown(meal_data)
         
-        # 3. 파일 저장
-        today = datetime.now().strftime('%Y-%m-%d')
-        file_path = self.save_to_file(markdown, today, db_path)
+        # 3. 파일 저장 (해당 주의 월요일 날짜 기준)
+        today = datetime.now()
+        # 월요일(0)을 기준으로 해당 주의 월요일 날짜 계산
+        days_since_monday = today.weekday()  # 월요일=0, 화요일=1, ..., 일요일=6
+        monday_date = today - timedelta(days=days_since_monday)
+        monday_str = monday_date.strftime('%Y-%m-%d')
+        
+        file_path = self.save_to_file(markdown, monday_str, db_path)
         
         return markdown, file_path

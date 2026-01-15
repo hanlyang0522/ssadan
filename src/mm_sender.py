@@ -4,8 +4,9 @@ Mattermost Sender - Mattermost 웹훅으로 메시지 전송
 import requests
 import os
 import time
+import re
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class MattermostSender:
@@ -104,9 +105,129 @@ class MattermostSender:
         message = f"🍽️ **오늘의 점심 메뉴** ({dt.strftime('%m월 %d일')} {weekday}요일)\n\n{menu_content}"
         return self.send_message(message)
     
+    def find_weekly_file(self, date: str, db_path: str = "db") -> Optional[str]:
+        """
+        주어진 날짜가 포함된 주간 식단 파일 찾기
+        
+        Args:
+            date: 날짜 (YYYY-MM-DD)
+            db_path: 저장된 파일 경로
+        
+        Returns:
+            파일 경로 또는 None
+        """
+        # 해당 날짜의 주 월요일 날짜 계산
+        dt = datetime.strptime(date, '%Y-%m-%d')
+        days_since_monday = dt.weekday()  # 월요일=0
+        monday_date = dt - timedelta(days=days_since_monday)
+        monday_str = monday_date.strftime('%Y-%m-%d')
+        
+        # 월요일 날짜로 파일 찾기
+        file_path = os.path.join(db_path, f"{monday_str}.md")
+        
+        if os.path.exists(file_path):
+            return file_path
+        
+        # 혹시 다른 날짜로 저장되어 있을 수 있으니 해당 주의 모든 날짜 시도
+        for day_offset in range(7):
+            check_date = monday_date + timedelta(days=day_offset)
+            check_file = os.path.join(db_path, f"{check_date.strftime('%Y-%m-%d')}.md")
+            if os.path.exists(check_file):
+                return check_file
+        
+        return None
+    
+    def extract_daily_menu(self, markdown_content: str, target_date: str) -> Optional[str]:
+        """
+        주간 식단 마크다운에서 특정 날짜의 메뉴만 추출
+        
+        Args:
+            markdown_content: 전체 주간 식단 마크다운
+            target_date: 추출할 날짜 (YYYY-MM-DD)
+        
+        Returns:
+            해당 날짜의 식단 문자열 (Markdown 테이블 형식)
+        """
+        try:
+            # 날짜를 "MM월 DD일 (요일)" 형식으로 변환
+            dt = datetime.strptime(target_date, '%Y-%m-%d')
+            target_month = dt.strftime('%m월').lstrip('0')  # 01월 -> 1월
+            target_day = dt.strftime('%d일').lstrip('0')  # 05일 -> 5일
+            weekday = ['월', '화', '수', '목', '금', '토', '일'][dt.weekday()]
+            
+            # 가능한 날짜 패턴들 ("01월 15일", "1월 15일", "01월 15일 (목)" 등)
+            date_patterns = [
+                f"{dt.strftime('%m월')} {dt.strftime('%d일')}",  # 01월 15일
+                f"{target_month} {target_day}",  # 1월 15일
+                f"{dt.strftime('%m월')} {target_day}",  # 01월 15일
+                f"{target_month} {dt.strftime('%d일')}",  # 1월 15일
+            ]
+            
+            lines = markdown_content.split('\n')
+            header_line = None
+            column_index = -1
+            
+            # 헤더 라인에서 날짜 컬럼 찾기
+            for i, line in enumerate(lines):
+                if '| 구분 |' in line or '|:---:|' in line or '| :--- |' in line:
+                    if '| 구분 |' in line:
+                        header_line = i
+                        columns = [col.strip() for col in line.split('|')]
+                        
+                        # 날짜 패턴에 맞는 컬럼 찾기
+                        for idx, col in enumerate(columns):
+                            for pattern in date_patterns:
+                                if pattern in col and weekday in col:
+                                    column_index = idx
+                                    break
+                            if column_index != -1:
+                                break
+                        break
+            
+            if column_index == -1:
+                print(f"✗ 날짜 컬럼을 찾을 수 없습니다: {target_date}")
+                return None
+            
+            # 테이블 데이터 추출
+            result_lines = []
+            result_lines.append(f"| 구분 | 메뉴 |")
+            result_lines.append(f"| :--- | :--- |")
+            
+            # 헤더 다음 줄부터 데이터 추출
+            in_table = False
+            for i in range(header_line + 1, len(lines)):
+                line = lines[i].strip()
+                
+                if not line or not line.startswith('|'):
+                    if in_table:
+                        break  # 테이블 끝
+                    continue
+                
+                if '|:---:|' in line or '| :--- |' in line:
+                    in_table = True
+                    continue
+                
+                columns = [col.strip() for col in line.split('|')]
+                
+                if len(columns) > column_index and columns[1]:  # 카테고리가 있는 행
+                    category = columns[1]  # 구분 (카테고리)
+                    menu = columns[column_index] if len(columns) > column_index else "-"
+                    
+                    if menu and menu != "-":
+                        result_lines.append(f"| {category} | {menu} |")
+            
+            if len(result_lines) <= 2:  # 헤더만 있는 경우
+                return None
+            
+            return "\n".join(result_lines)
+        
+        except Exception as e:
+            print(f"✗ 메뉴 추출 중 오류 발생: {str(e)}")
+            return None
+    
     def load_and_send_daily(self, date: str, db_path: str = "db") -> bool:
         """
-        저장된 파일에서 해당 날짜의 식단을 읽어서 전송
+        저장된 주간 파일에서 해당 날짜의 식단만 추출하여 전송
         
         Args:
             date: 날짜 (YYYY-MM-DD)
@@ -115,18 +236,32 @@ class MattermostSender:
         Returns:
             성공 여부
         """
-        file_path = os.path.join(db_path, f"{date}.md")
+        # 1. 해당 날짜가 포함된 주간 파일 찾기
+        file_path = self.find_weekly_file(date, db_path)
         
-        if not os.path.exists(file_path):
-            print(f"✗ 파일을 찾을 수 없습니다: {file_path}")
+        if not file_path:
+            print(f"✗ 날짜 {date}에 해당하는 주간 식단 파일을 찾을 수 없습니다.")
             return False
         
         try:
+            # 2. 파일 읽기
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            return self.send_daily_menu(date, content)
+            print(f"✓ 주간 파일 읽기 완료: {file_path}")
+            
+            # 3. 해당 날짜의 메뉴만 추출
+            daily_menu = self.extract_daily_menu(content, date)
+            
+            if not daily_menu:
+                print(f"✗ 날짜 {date}의 메뉴를 추출할 수 없습니다.")
+                return False
+            
+            print(f"✓ {date} 메뉴 추출 완료")
+            
+            # 4. 추출한 메뉴 전송
+            return self.send_daily_menu(date, daily_menu)
         
         except Exception as e:
-            print(f"✗ 파일 읽기 오류: {str(e)}")
+            print(f"✗ 파일 읽기 또는 메뉴 추출 오류: {str(e)}")
             return False
