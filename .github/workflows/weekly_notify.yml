@@ -1,0 +1,46 @@
+name: Weekly Menu Notification
+
+on:
+  workflow_dispatch:  # 수동 실행 (이미지 업로드 후 실행)
+    inputs:
+      image_path:
+        description: '식단표 이미지 경로'
+        required: true
+        default: 'meal_schedule.jpg'
+
+jobs:
+  process-and-notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tesseract-ocr tesseract-ocr-kor
+    
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Process image and send weekly menu
+      env:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+      run: |
+        cd src
+        python main.py process --image ../${{ github.event.inputs.image_path }}
+    
+    - name: Commit and push generated markdown files
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add db/*.md
+        git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
+        git push

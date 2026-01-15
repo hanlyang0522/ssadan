@@ -1,0 +1,32 @@
+name: Daily Lunch Notification
+
+on:
+  schedule:
+    # 매일 오전 9시 10분 (KST = UTC+9)
+    # UTC 기준 0시 10분 = KST 9시 10분
+    - cron: '10 0 * * *'
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  send-daily-lunch:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Send daily lunch notification
+      env:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+      run: |
+        cd src
+        python main.py daily
