@@ -1,6 +1,7 @@
 name: Network Test
 on:  # 코드를 푸시할 때마다 실행
-
+  workflow_dispatch
+  
 jobs:
   check-connection:
     runs-on: ubuntu-latest
