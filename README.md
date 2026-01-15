@@ -23,9 +23,10 @@
 
 ## 작동 방법
 
-1. **이미지 처리**: 식단표를 찍은 이미지에서 식단을 추출해 Markdown 테이블로 변환
-2. **주간 알림**: 변환이 완료되면 Mattermost webhook으로 1주일치 식단 전송
-3. **일일 알림**: 매일 오전 9시 10분에 그 날 점심 식단을 Mattermost로 전송
+1. **이미지 처리 (OCR)**: 식단표를 찍은 이미지에서 식단을 추출해 Markdown 테이블로 변환하고 `db/yyyy-mm-dd.md` 파일로 저장
+2. **파일 확인 및 수정**: OCR 정확도가 완벽하지 않을 수 있으므로 생성된 Markdown 파일을 확인하고 필요시 수정
+3. **주간 알림**: 확인/수정된 파일을 Mattermost webhook으로 1주일치 식단 전송
+4. **일일 알림**: 매일 오전 9시 10분에 그 날 점심 식단을 Mattermost로 전송
 
 ## 설치
 
@@ -62,22 +63,35 @@ MATTERMOST_WEBHOOK_URL=https://your-mattermost-server.com/hooks/xxx
 
 ### 로컬 실행
 
-#### 1. 이미지 처리 및 주간 식단표 전송
+#### 1. 이미지 처리 및 주간 식단표 전송 (통합)
 ```bash
 cd src
-python main.py process --image meal_schedule.jpg
+python main.py process --image ../meal_schedule.jpg --db ../db
 ```
 
-#### 2. 오늘 점심 식단 전송
+#### 2. 이미지 OCR 처리만 수행 (웹훅 전송 없음)
 ```bash
 cd src
-python main.py daily
+python main.py ocr --image ../meal_schedule.jpg --db ../db
+```
+OCR 처리 후 생성된 `db/yyyy-mm-dd.md` 파일을 확인하고 필요시 수정할 수 있습니다.
+
+#### 3. 저장된 파일로 주간 식단표 전송
+```bash
+cd src
+python main.py notify --date 2026-01-15 --db ../db
 ```
 
-#### 3. 특정 날짜 점심 식단 전송
+#### 4. 오늘 점심 식단 전송
 ```bash
 cd src
-python main.py daily --date 2026-01-15
+python main.py daily --db ../db
+```
+
+#### 5. 특정 날짜 점심 식단 전송
+```bash
+cd src
+python main.py daily --date 2026-01-15 --db ../db
 ```
 
 ### GitHub Actions 자동화
@@ -89,10 +103,22 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 
 #### 2. 주간 식단표 처리
 
+**2단계 프로세스로 분리되어 있습니다:**
+
+**Step 1: OCR 처리**
 1. 식단표 이미지를 저장소에 커밋 (예: `meal_schedule.jpg`)
 2. GitHub Actions > "Weekly Menu Notification" 선택
 3. "Run workflow" 클릭
-4. 이미지 경로 입력 후 실행
+4. 이미지 경로 입력
+5. step 선택: **"ocr"** 선택
+6. 실행 후 자동으로 `db/yyyy-mm-dd.md` 파일이 생성되고 커밋됩니다
+
+**Step 2: 파일 확인 및 전송**
+1. 생성된 `db/yyyy-mm-dd.md` 파일을 확인하고 필요시 수정
+2. GitHub Actions > "Weekly Menu Notification" 선택
+3. "Run workflow" 클릭
+4. step 선택: **"notify"** 선택
+5. 실행하면 저장된 파일 내용이 Mattermost로 전송됩니다
 
 #### 3. 일일 알림
 
