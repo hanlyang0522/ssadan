@@ -10,6 +10,8 @@ on:
 jobs:
   send-daily-lunch:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Required to checkout repository
     
     steps:
     - name: Checkout repository
@@ -50,4 +52,4 @@ jobs:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
       run: |
         cd src
-        python main.py daily
+        python main.py daily --db ../db
