@@ -1,5 +1,5 @@
 name: Network Test
-on: push # 코드를 푸시할 때마다 실행
+on:  # 코드를 푸시할 때마다 실행
 
 jobs:
   check-connection:
