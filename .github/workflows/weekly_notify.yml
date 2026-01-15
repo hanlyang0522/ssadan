@@ -33,16 +33,28 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y tesseract-ocr tesseract-ocr-kor
-    
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt
     
+    - name: Setup Google Cloud credentials
+      env:
+        GOOGLE_CLOUD_CREDENTIALS: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+        GOOGLE_CLOUD_PROJECT_ID: ${{ secrets.GOOGLE_CLOUD_PROJECT_ID }}
+        GOOGLE_CLOUD_PROCESSOR_ID: ${{ secrets.GOOGLE_CLOUD_PROCESSOR_ID }}
+      run: |
+        if [ -z "$GOOGLE_CLOUD_CREDENTIALS" ]; then
+          echo "❌ GOOGLE_CLOUD_CREDENTIALS secret이 설정되지 않았습니다."
+          exit 1
+        fi
+        echo "✅ Google Cloud 인증 정보 확인 완료"
+    
     - name: Process image with OCR and save to db/
+      env:
+        GOOGLE_CLOUD_CREDENTIALS: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+        GOOGLE_CLOUD_PROJECT_ID: ${{ secrets.GOOGLE_CLOUD_PROJECT_ID }}
+        GOOGLE_CLOUD_PROCESSOR_ID: ${{ secrets.GOOGLE_CLOUD_PROCESSOR_ID }}
+        GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
       run: |
         cd src
         python main.py ocr --image ../${{ github.event.inputs.image_path }} --db ../db

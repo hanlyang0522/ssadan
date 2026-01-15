@@ -1,75 +1,162 @@
 """
-OCR Processor - 이미지에서 식단을 추출하여 Markdown 테이블로 변환
+OCR Processor - 이미지에서 식단을 추출하여 Markdown 테이블로 변환 (Google Document AI 사용)
 """
-import pytesseract
+from google.cloud import documentai_v1 as documentai
 from PIL import Image
 import re
+import json
+import base64
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import os
 
 
 class OCRProcessor:
-    """이미지에서 식단을 추출하고 Markdown으로 변환하는 클래스"""
+    """이미지에서 식단을 추출하고 Markdown으로 변환하는 클래스 (Google Document AI)"""
     
     def __init__(self, image_path: str):
         self.image_path = image_path
         self.meal_data = {}
+        
+        # Google Cloud 인증 정보 확인
+        self.credentials_json = os.getenv('GOOGLE_CLOUD_CREDENTIALS')
+        if not self.credentials_json:
+            raise ValueError("GOOGLE_CLOUD_CREDENTIALS 환경 변수가 설정되지 않았습니다.")
+        
+        # Document AI 설정
+        self.project_id = os.getenv('GOOGLE_CLOUD_PROJECT_ID')
+        self.location = os.getenv('GOOGLE_CLOUD_LOCATION', 'us')  # 기본값: us
+        self.processor_id = os.getenv('GOOGLE_CLOUD_PROCESSOR_ID')
+        
+        if not self.project_id or not self.processor_id:
+            raise ValueError("GOOGLE_CLOUD_PROJECT_ID 및 GOOGLE_CLOUD_PROCESSOR_ID가 필요합니다.")
     
     def extract_meal_from_image(self) -> Dict[str, Dict[str, str]]:
         """
-        이미지에서 식단 추출
+        Google Document AI로 이미지에서 테이블 추출
         
         Returns:
             Dict[날짜, Dict[카테고리, 메뉴]] 형식의 딕셔너리
         """
         try:
-            image = Image.open(self.image_path)
-            text = pytesseract.image_to_string(image, lang='kor+eng')
-            self.meal_data = self._parse_ocr_text(text)
+            # 인증 정보 설정
+            credentials_dict = json.loads(self.credentials_json)
+            from google.oauth2 import service_account
+            credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+            
+            # Document AI 클라이언트 생성
+            client = documentai.DocumentProcessorServiceClient(credentials=credentials)
+            
+            # 프로세서 이름 생성
+            name = client.processor_path(self.project_id, self.location, self.processor_id)
+            
+            # 이미지 읽기
+            with open(self.image_path, "rb") as image_file:
+                image_content = image_file.read()
+            
+            # Document AI 요청
+            raw_document = documentai.RawDocument(
+                content=image_content,
+                mime_type="image/jpeg"  # 또는 image/png
+            )
+            
+            request = documentai.ProcessRequest(
+                name=name,
+                raw_document=raw_document
+            )
+            
+            print("📡 Google Document AI로 이미지 분석 중...")
+            result = client.process_document(request=request)
+            document = result.document
+            
+            # 테이블 추출 및 파싱
+            self.meal_data = self._parse_document_tables(document)
             return self.meal_data
+            
         except FileNotFoundError:
-            print(f"Error: 이미지 파일을 찾을 수 없습니다 - {self.image_path}")
+            print(f"✗ 이미지 파일을 찾을 수 없습니다: {self.image_path}")
             return {}
         except Exception as e:
-            print(f"Error: OCR 처리 중 오류 발생 - {str(e)}")
+            print(f"✗ Document AI 처리 중 오류 발생: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {}
     
-    def _parse_ocr_text(self, text: str) -> Dict[str, Dict[str, str]]:
+    def _parse_document_tables(self, document: documentai.Document) -> Dict[str, Dict[str, str]]:
         """
-        OCR 텍스트를 파싱하여 구조화된 데이터로 변환
+        Document AI의 테이블 결과를 파싱하여 구조화된 데이터로 변환
         
-        실제 식단표 형식에 맞게 파싱 로직을 구현해야 합니다.
+        Returns:
+            Dict[날짜, Dict[카테고리, 메뉴]] 형식의 딕셔너리
         """
         meal_data = {}
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
         
-        current_date = None
-        current_category = None
+        # 테이블 추출
+        for page in document.pages:
+            for table in page.tables:
+                # 헤더 행에서 날짜 추출
+                header_cells = table.header_rows[0].cells if table.header_rows else table.body_rows[0].cells
+                dates = []
+                
+                for i, cell in enumerate(header_cells):
+                    if i == 0:  # 첫 번째 셀은 "구분"
+                        continue
+                    
+                    cell_text = self._get_table_cell_text(cell, document)
+                    # 날짜 패턴 인식: "01월 12일 (월)"
+                    date_match = re.search(r'(\d{1,2})월\s*(\d{1,2})일', cell_text)
+                    if date_match:
+                        month = date_match.group(1).zfill(2)
+                        day = date_match.group(2).zfill(2)
+                        date_str = f"{datetime.now().year}-{month}-{day}"
+                        dates.append(date_str)
+                        if date_str not in meal_data:
+                            meal_data[date_str] = {}
+                
+                # 데이터 행 처리
+                start_row = 1 if table.header_rows else 1
+                for row in table.body_rows[start_row:]:
+                    if len(row.cells) == 0:
+                        continue
+                    
+                    # 첫 번째 셀은 카테고리
+                    category = self._get_table_cell_text(row.cells[0], document).strip()
+                    
+                    if not category or category == "구분":
+                        continue
+                    
+                    # 각 날짜별 메뉴 추출
+                    for i, cell in enumerate(row.cells[1:]):
+                        if i < len(dates):
+                            menu = self._get_table_cell_text(cell, document).strip()
+                            if menu:
+                                date_str = dates[i]
+                                meal_data[date_str][category] = menu
         
-        for line in lines:
-            # 날짜 패턴 인식
-            date_match = re.search(r'(\d{1,2})[월/][\s]*(\d{1,2})[일]', line)
-            if date_match:
-                month = date_match.group(1).zfill(2)
-                day = date_match.group(2).zfill(2)
-                current_date = f"{datetime.now().year}-{month}-{day}"
-                if current_date not in meal_data:
-                    meal_data[current_date] = {}
-                continue
-            
-            # 카테고리 인식 (20F 일반식, 10F 공존, 도시락 등)
-            if any(keyword in line for keyword in ['20F', '10F', '도시락', '일반식', '공존', '브런치', '샐러드']):
-                current_category = line
-                if current_date and current_category not in meal_data[current_date]:
-                    meal_data[current_date][current_category] = []
-                continue
-            
-            # 메뉴 내용 추가
-            if current_date and current_category:
-                meal_data[current_date][current_category].append(line)
-        
+        print(f"✓ {len(meal_data)}개 날짜의 식단 추출 완료")
         return meal_data
+    
+    def _get_table_cell_text(self, cell, document: documentai.Document) -> str:
+        """
+        테이블 셀에서 텍스트 추출
+        """
+        text = ""
+        # Layout을 사용하여 텍스트 추출
+        if hasattr(cell, 'layout') and cell.layout:
+            text = self._get_text_from_layout(cell.layout, document)
+        return text.strip()
+    
+    def _get_text_from_layout(self, layout, document: documentai.Document) -> str:
+        """
+        Layout에서 텍스트 추출
+        """
+        text = ""
+        if hasattr(layout, 'text_anchor') and layout.text_anchor:
+            for segment in layout.text_anchor.text_segments:
+                start_index = int(segment.start_index) if hasattr(segment, 'start_index') else 0
+                end_index = int(segment.end_index) if hasattr(segment, 'end_index') else 0
+                text += document.text[start_index:end_index]
+        return text
     
     def convert_to_markdown(self, meal_data: Optional[Dict] = None) -> str:
         """

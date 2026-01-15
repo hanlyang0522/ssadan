@@ -35,16 +35,22 @@
 ```bash
 # Python 패키지 설치
 pip install -r requirements.txt
-
-# Tesseract OCR 설치 (로컬 환경)
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr tesseract-ocr-kor
-
-# macOS
-brew install tesseract tesseract-lang
 ```
 
-### 2. 환경 설정
+### 2. Google Cloud 설정
+
+#### 2.1. Google Cloud 프로젝트 생성 및 Document AI 설정
+1. [Google Cloud Console](https://console.cloud.google.com/)에서 프로젝트 생성
+2. Document AI API 활성화
+3. Document AI > Processors에서 **Form Parser** 프로세서 생성
+4. Processor ID 복사 (예: `1234567890abcdef`)
+
+#### 2.2. 서비스 계정 생성
+1. IAM & Admin > Service Accounts에서 서비스 계정 생성
+2. 역할: **Document AI API User** 추가
+3. 키 생성 (JSON 형식) 및 다운로드
+
+### 3. 환경 설정
 
 ```bash
 # .env 파일 생성
@@ -54,10 +60,19 @@ cp .env.example .env
 nano .env
 ```
 
-`.env`에서 Mattermost Webhook URL 설정:
+`.env` 파일 설정:
 ```bash
+# Mattermost Webhook URL
 MATTERMOST_WEBHOOK_URL=https://your-mattermost-server.com/hooks/xxx
+
+# Google Cloud Document AI 설정
+GOOGLE_CLOUD_CREDENTIALS={"type":"service_account","project_id":"your-project",...}
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_PROCESSOR_ID=your-processor-id
+GOOGLE_CLOUD_LOCATION=us  # 또는 eu, asia 등
 ```
+
+**주의**: `GOOGLE_CLOUD_CREDENTIALS`는 다운로드한 JSON 파일의 내용을 한 줄로 작성합니다.
 
 ## 사용법
 
@@ -100,18 +115,23 @@ python main.py daily --date 2026-01-15 --db ../db
 
 Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가:
 - `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL
+- `GOOGLE_CLOUD_CREDENTIALS`: Google Cloud 서비스 계정 JSON 키 (전체 내용)
+- `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud 프로젝트 ID
+- `GOOGLE_CLOUD_PROCESSOR_ID`: Document AI Processor ID
+- `GOOGLE_CLOUD_LOCATION`: Processor 위치 (예: `us`, `eu`, `asia`)
 
 #### 2. 주간 식단표 처리
 
 **2단계 프로세스로 분리되어 있습니다:**
 
-**Step 1: OCR 처리**
+**Step 1: OCR 처리 (Google Document AI)**
 1. 식단표 이미지를 저장소에 커밋 (예: `meal_schedule.jpg`)
 2. GitHub Actions > "Weekly Menu Notification" 선택
 3. "Run workflow" 클릭
 4. 이미지 경로 입력
 5. step 선택: **"ocr"** 선택
-6. 실행 후 자동으로 `db/yyyy-mm-dd.md` 파일이 생성되고 커밋됩니다
+6. Google Document AI가 테이블 구조를 인식하여 `db/yyyy-mm-dd.md` 파일 생성
+7. 자동으로 파일이 커밋됩니다
 
 **Step 2: 파일 확인 및 전송**
 1. 생성된 `db/yyyy-mm-dd.md` 파일을 확인하고 필요시 수정
