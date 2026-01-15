@@ -57,7 +57,7 @@ class MattermostSender:
             
             except requests.exceptions.Timeout as e:
                 if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt  # 지수 백오프: 1초, 2초, 4초
+                    wait_time = 2 ** attempt  # 지수 백오프: 1초(2^0), 2초(2^1), 4초(2^2)
                     print(f"⚠️  타임아웃 발생 (시도 {attempt + 1}/{max_retries}): {str(e)}")
                     print(f"   {wait_time}초 후 재시도...")
                     time.sleep(wait_time)
@@ -67,6 +67,8 @@ class MattermostSender:
                     return False
             
             except requests.exceptions.RequestException as e:
+                # 타임아웃 외의 오류(DNS 실패, SSL 오류 등)는 재시도하지 않음
+                # 이러한 오류는 일시적이지 않고 재시도해도 해결되지 않는 경우가 많음
                 print(f"✗ 네트워크 오류: {str(e)}")
                 return False
         
