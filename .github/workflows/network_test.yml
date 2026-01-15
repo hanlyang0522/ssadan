@@ -1,0 +1,11 @@
+name: Network Test
+on: push # 코드를 푸시할 때마다 실행
+
+jobs:
+  check-connection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: DNS 및 포트 확인
+        run: |
+          nslookup meeting.ssafy.com          # DNS 확인
+          curl -v https://meeting.ssafy.com  # 상세 연결 과정 확인
