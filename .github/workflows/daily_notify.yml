@@ -10,6 +10,8 @@ on:
 jobs:
   send-daily-lunch:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Required to checkout repository
     
     steps:
     - name: Checkout repository
