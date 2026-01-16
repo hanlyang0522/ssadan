@@ -175,8 +175,6 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     try:
         if dry_run:
             # 테스트 모드: 웹훅 전송 없이 결과만 출력
-            from mm_sender import MattermostSender
-            
             # MattermostSender 없이 직접 파일 읽기 및 메뉴 추출
             # find_weekly_file 로직 재현
             dt = datetime.strptime(date, '%Y-%m-%d')
