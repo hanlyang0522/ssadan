@@ -2,9 +2,11 @@ name: Daily Lunch Notification
 
 on:
   schedule:
-    # 매일 오전 9시 10분 (KST = UTC+9)
-    # UTC 기준 0시 10분 = KST 9시 10분
-    - cron: '10 0 * * *'
+    # 평일 오전 9시 10분 (KST = UTC+9) 목표
+    # GitHub Actions 스케줄링 지연(~30분)을 고려하여 8시 40분에 예약
+    # UTC 기준 23시 50분 (전날) = KST 8시 50분
+    # 실제 실행 시간: ~9시 10분 KST (git action의 cron은 최대 1시간 지연 가능)
+    - cron: '50 23 * * 0-4'
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
