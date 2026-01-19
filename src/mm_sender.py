@@ -86,6 +86,16 @@ class MattermostSender:
         message = f"📅 **주간 식단표**\n\n{markdown_content}"
         return self.send_message(message)
     
+    def send_today_song_request(self) -> bool:
+        """
+        오늘의 노래 추천 요청 메시지 전송
+        
+        Returns:
+            성공 여부
+        """
+        message = "🎵 오늘의 노래를 추천해주세요~"
+        return self.send_message(message, username="노래봇")
+    
     def send_daily_menu(self, date: str, menu_content: str) -> bool:
         """
         일일 식단 전송

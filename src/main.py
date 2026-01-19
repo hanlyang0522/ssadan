@@ -140,6 +140,40 @@ def process_image(image_path: str, db_path: str = "db") -> bool:
         return False
 
 
+def send_today_song() -> bool:
+    """
+    오늘의 노래 추천 요청 메시지 전송
+    
+    Returns:
+        성공 여부
+    """
+    print("=" * 60)
+    print("🎵 오늘의 노래 추천 요청")
+    print("=" * 60)
+    
+    # 환경변수에서 웹훅 URL 가져오기
+    webhook_url = os.getenv('MATTERMOST_TODAY_SONG_URL')
+    if not webhook_url:
+        print("✗ 오류: MATTERMOST_TODAY_SONG_URL 환경변수가 설정되지 않았습니다.")
+        return False
+    
+    # 메시지 전송
+    print("\n📤 메시지 전송 중...")
+    sender = MattermostSender(webhook_url=webhook_url)
+    success = sender.send_today_song_request()
+    
+    if success:
+        print("\n" + "=" * 60)
+        print("✅ 오늘의 노래 추천 요청 완료")
+        print("=" * 60)
+    else:
+        print("\n" + "=" * 60)
+        print("❌ 오늘의 노래 추천 요청 실패")
+        print("=" * 60)
+    
+    return success
+
+
 def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = False) -> bool:
     """
     해당 날짜의 점심 식단 전송
@@ -238,6 +272,9 @@ def main():
     daily_parser.add_argument('--db', default='db', help='Markdown 파일 저장 경로 (기본값: db)')
     daily_parser.add_argument('--dry-run', action='store_true', help='웹훅 전송 없이 결과만 확인')
     
+    # song 명령
+    song_parser = subparsers.add_parser('song', help='오늘의 노래 추천 요청')
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -260,6 +297,10 @@ def main():
         elif args.command == 'daily':
             dry_run = getattr(args, 'dry_run', False)
             success = send_daily_lunch(args.date, args.db, dry_run)
+            return 0 if success else 1
+        
+        elif args.command == 'song':
+            success = send_today_song()
             return 0 if success else 1
     
     except Exception as e:

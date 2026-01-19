@@ -109,12 +109,19 @@ cd src
 python main.py daily --date 2026-01-15 --db ../db
 ```
 
+#### 6. 오늘의 노래 추천 요청
+```bash
+cd src
+python main.py song
+```
+
 ### GitHub Actions 자동화
 
 #### 1. GitHub Secrets 설정
 
 Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가:
-- `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL
+- `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용)
+- `MATTERMOST_TODAY_SONG_URL`: Mattermost Incoming Webhook URL (오늘의 노래 추천용)
 - `GOOGLE_CLOUD_CREDENTIALS`: Google Cloud 서비스 계정 JSON 키 (전체 내용)
 - `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud 프로젝트 ID
 - `GOOGLE_CLOUD_PROCESSOR_ID`: Document AI Processor ID
@@ -144,6 +151,11 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 
 매일 오전 9시 10분(KST)에 자동으로 실행됩니다.
 수동 실행: Actions > "Daily Lunch Notification" > "Run workflow"
+
+#### 4. 오늘의 노래 추천
+
+매일 오전 7시(KST)에 자동으로 실행됩니다.
+수동 실행: Actions > "Today Song Recommendation" > "Run workflow"
 
 ## 출력 형식 예시
 
