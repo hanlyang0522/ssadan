@@ -1,25 +1,23 @@
-"""
-Mattermost Sender - Mattermost 웹훅으로 메시지 전송
-"""
+"""Mattermost 웹훅 메시지 전송"""
 import requests
 import os
 import time
-import re
 from typing import Optional
 from datetime import datetime, timedelta
 
 
 class MattermostSender:
-    """Mattermost 웹훅으로 식단 정보를 전송하는 클래스"""
+    """Mattermost 웹훅 메시지 전송"""
     
-    def __init__(self, webhook_url: Optional[str] = None):
+    def __init__(self, webhook_url: Optional[str] = None, skip_validation: bool = False):
         """
         Args:
             webhook_url: Mattermost incoming webhook URL
+            skip_validation: True이면 webhook URL 검증 생략 (dry_run용)
         """
         self.webhook_url = webhook_url or os.getenv('MATTERMOST_WEBHOOK_URL')
         
-        if not self.webhook_url:
+        if not skip_validation and not self.webhook_url:
             raise ValueError("MATTERMOST_WEBHOOK_URL이 설정되지 않았습니다.")
     
     def send_message(self, text: str, username: str = "식단봇", max_retries: int = 3) -> bool:
@@ -225,13 +223,14 @@ class MattermostSender:
             print(f"✗ 메뉴 추출 중 오류 발생: {str(e)}")
             return None
     
-    def load_and_send_daily(self, date: str, db_path: str = "db") -> bool:
+    def load_and_send_daily(self, date: str, db_path: str = "db", dry_run: bool = False) -> bool:
         """
         저장된 주간 파일에서 해당 날짜의 식단만 추출하여 전송
         
         Args:
             date: 날짜 (YYYY-MM-DD)
             db_path: 저장된 파일 경로
+            dry_run: True이면 웹훅 전송 없이 결과만 출력
         
         Returns:
             성공 여부
@@ -259,8 +258,21 @@ class MattermostSender:
             
             print(f"✓ {date} 메뉴 추출 완료")
             
-            # 4. 추출한 메뉴 전송
-            return self.send_daily_menu(date, daily_menu)
+            # 4. dry_run 모드면 출력만, 아니면 전송
+            if dry_run:
+                dt = datetime.strptime(date, '%Y-%m-%d')
+                weekday = ['월', '화', '수', '목', '금', '토', '일'][dt.weekday()]
+                print("\n" + "=" * 60)
+                print(f"📋 추출된 메뉴 (웹훅 전송 없이 확인만)")
+                print("=" * 60)
+                print(f"\n🍽️ **오늘의 점심 메뉴** ({dt.strftime('%m월 %d일')} {weekday}요일)\n")
+                print(daily_menu)
+                print("\n" + "=" * 60)
+                print("💡 실제 전송을 원하시면 --dry-run 옵션 없이 실행하세요.")
+                print("=" * 60)
+                return True
+            else:
+                return self.send_daily_menu(date, daily_menu)
         
         except Exception as e:
             print(f"✗ 파일 읽기 또는 메뉴 추출 오류: {str(e)}")
