@@ -33,6 +33,14 @@ SSADAN (SSAFY 식단 알림 봇) is an automated meal schedule notification bot 
 
 ## Coding Conventions
 
+### Code Simplicity and Maintainability (IMPORTANT)
+- **Keep code generation minimal**: Write only what is necessary to solve the problem
+- **Prefer simplicity over complexity**: Choose straightforward solutions over clever ones
+- **Avoid over-engineering**: Don't add features or abstractions that aren't immediately needed
+- **Keep functions small and focused**: Each function should do one thing well
+- **Minimize dependencies**: Use standard library when possible
+- **Write self-documenting code**: Clear variable names and simple logic reduce need for comments
+
 ### Python Style
 - Follow PEP 8 style guidelines
 - Use type hints for function parameters and return values
@@ -168,9 +176,12 @@ Generated meal schedules use this structure (5-day week, Monday to Friday):
 - Validate environment variables before use
 
 ## When Making Changes
-1. Maintain backward compatibility with existing Markdown files
-2. Test both local and CI/CD workflows
-3. Update README.md if adding new features
-4. Keep Korean language consistency in user messages
-5. Preserve existing file encoding (UTF-8)
-6. Don't modify working GitHub Actions unless necessary
+1. **Make minimal, focused changes**: Only modify what's necessary to fix the issue
+2. **Avoid refactoring working code**: If it works, don't change it unless required
+3. Maintain backward compatibility with existing Markdown files
+4. Test both local and CI/CD workflows
+5. Update README.md if adding new features
+6. Keep Korean language consistency in user messages
+7. Preserve existing file encoding (UTF-8)
+8. Don't modify working GitHub Actions unless necessary
+9. **Resist the urge to "improve" code that isn't broken**: Focus on the task at hand
