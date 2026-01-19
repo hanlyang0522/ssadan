@@ -9,14 +9,15 @@ from datetime import datetime, timedelta
 class MattermostSender:
     """Mattermost 웹훅 메시지 전송"""
     
-    def __init__(self, webhook_url: Optional[str] = None):
+    def __init__(self, webhook_url: Optional[str] = None, skip_validation: bool = False):
         """
         Args:
             webhook_url: Mattermost incoming webhook URL
+            skip_validation: True이면 webhook URL 검증 생략 (dry_run용)
         """
         self.webhook_url = webhook_url or os.getenv('MATTERMOST_WEBHOOK_URL')
         
-        if not self.webhook_url:
+        if not skip_validation and not self.webhook_url:
             raise ValueError("MATTERMOST_WEBHOOK_URL이 설정되지 않았습니다.")
     
     def send_message(self, text: str, username: str = "식단봇", max_retries: int = 3) -> bool:

@@ -171,7 +171,7 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     print("=" * 60)
     
     try:
-        sender = MattermostSender()
+        sender = MattermostSender(skip_validation=dry_run)
         success = sender.load_and_send_daily(date, db_path, dry_run)
         
         if not dry_run:
