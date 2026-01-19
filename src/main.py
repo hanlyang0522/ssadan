@@ -11,6 +11,10 @@ from ocr_processor import OCRProcessor
 from mm_sender import MattermostSender
 
 
+# 요일 이름 상수
+WEEKDAY_NAMES_KR = ['월', '화', '수', '목', '금', '토', '일']
+
+
 def ocr_only(image_path: str, db_path: str = "db") -> bool:
     """
     이미지를 OCR 처리하고 Markdown 파일로 저장 (웹훅 전송 없음)
@@ -163,7 +167,15 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     if date is None:
         # 한국 시간대(KST, UTC+9) 사용
         kst = timezone(timedelta(hours=9))
-        date = datetime.now(kst).strftime('%Y-%m-%d')
+        now_kst = datetime.now(kst)
+        date = now_kst.strftime('%Y-%m-%d')
+        
+        # 주말(토요일=5, 일요일=6) 체크
+        if now_kst.weekday() >= 5:
+            print("=" * 60)
+            print(f"ℹ️  주말에는 점심 식단을 전송하지 않습니다: {date} ({WEEKDAY_NAMES_KR[now_kst.weekday()]}요일)")
+            print("=" * 60)
+            return True  # 에러가 아니므로 True 반환
     
     print("=" * 60)
     if dry_run:
@@ -199,7 +211,7 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
             print(f"✓ 주간 파일 읽기 완료: {file_path}")
             
             # extract_daily_menu 로직 재현
-            weekday = ['월', '화', '수', '목', '금', '토', '일'][dt.weekday()]
+            weekday = WEEKDAY_NAMES_KR[dt.weekday()]
             target_month = dt.strftime('%m월').lstrip('0')
             target_day = dt.strftime('%d일').lstrip('0')
             
