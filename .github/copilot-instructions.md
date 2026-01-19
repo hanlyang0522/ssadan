@@ -11,7 +11,7 @@ SSADAN (SSAFY 식단 알림 봇) is an automated meal schedule notification bot 
 ```
 .
 ├── .github/workflows/      # GitHub Actions automation
-│   ├── daily_notify.yml    # Daily lunch notifications (9:10 AM KST)
+│   ├── daily_notify.yml    # Daily lunch notifications (scheduled 8:50 AM KST, runs ~9:10-9:40 AM)
 │   └── weekly_notify.yml   # Weekly menu processing
 ├── db/                     # Extracted meal schedules (YYYY-MM-DD.md)
 ├── src/                    # Core Python modules
@@ -131,15 +131,15 @@ Required variables (stored in `.env` locally, GitHub Secrets in CI):
 - Each step can be run independently
 
 ## Markdown Format
-Generated meal schedules use this structure:
+Generated meal schedules use this structure (5-day week, Monday to Friday):
 ```markdown
-## 🍴 SSAFY 주간메뉴표 (MM/DD ~ MM/DD)
+## 🍴 SSAFY 주간메뉴표 (01월 12일 ~ 01월 16일)
 
-| 구분 | MM월 DD일 (월) | MM월 DD일 (화) | ... |
-| :--- | :--- | :--- | :--- |
-| **20F 일반식 (A. 한식)** | 메뉴1<br>메뉴2 | ... | ... |
-| **20F 일반식 (B. 일품)** | 메뉴1<br>메뉴2 | ... | ... |
-| **도시락** | 메뉴1<br>메뉴2 | ... | ... |
+| 구분 | 01월 12일 (월) | 01월 13일 (화) | 01월 14일 (수) | 01월 15일 (목) | 01월 16일 (금) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **20F 일반식 (A. 한식)** | 부대찌개<br>현미밥&쌀밥 | 김치찌개<br>쌀밥 | 된장찌개<br>쌀밥 | 순두부찌개<br>쌀밥 | 육개장<br>쌀밥 |
+| **20F 일반식 (B. 일품)** | 카레라이스 | 돈까스 | 짜장면 | 비빔밥 | 볶음밥 |
+| **도시락** | 매콤돈사태찜 | 닭갈비 | 제육볶음 | 불고기 | 생선구이 |
 ```
 
 ## Common Tasks
