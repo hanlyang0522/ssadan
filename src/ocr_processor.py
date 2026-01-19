@@ -1,18 +1,14 @@
-"""
-OCR Processor - 이미지에서 식단을 추출하여 Markdown 테이블로 변환 (Google Document AI 사용)
-"""
+"""식단표 이미지 OCR 처리 및 Markdown 변환 (Google Document AI)"""
 from google.cloud import documentai_v1 as documentai
-from PIL import Image
 import re
 import json
-import base64
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import os
 
 
 class OCRProcessor:
-    """이미지에서 식단을 추출하고 Markdown으로 변환하는 클래스 (Google Document AI)"""
+    """Google Document AI를 사용한 식단 이미지 OCR 처리"""
     
     def __init__(self, image_path: str):
         self.image_path = image_path

@@ -1,6 +1,4 @@
-"""
-Main Entry Point - 전체 프로세스 제어
-"""
+"""SSAFY 식단 알림 봇 - CLI 진입점"""
 import argparse
 import sys
 import os
@@ -90,20 +88,10 @@ def notify_weekly(date: str = None, db_path: str = "db") -> bool:
         
         return success
     
-    except ValueError as e:
-        print(f"✗ 설정 오류: {str(e)}")
-        return False
-    except FileNotFoundError as e:
-        print(f"✗ 파일을 찾을 수 없습니다: {str(e)}")
-        return False
-    except UnicodeDecodeError as e:
-        print(f"✗ 파일 인코딩 오류: {str(e)}")
-        return False
-    except PermissionError as e:
-        print(f"✗ 파일 접근 권한 오류: {str(e)}")
-        return False
     except Exception as e:
-        print(f"✗ 파일 읽기 오류: {str(e)}")
+        print(f"✗ 파일 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -147,8 +135,8 @@ def process_image(image_path: str, db_path: str = "db") -> bool:
         
         return success
     
-    except ValueError as e:
-        print(f"✗ 설정 오류: {str(e)}")
+    except Exception as e:
+        print(f"✗ 오류: {str(e)}")
         return False
 
 
@@ -165,17 +153,15 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
         성공 여부
     """
     if date is None:
-        # 한국 시간대(KST, UTC+9) 사용
         kst = timezone(timedelta(hours=9))
         now_kst = datetime.now(kst)
         date = now_kst.strftime('%Y-%m-%d')
         
-        # 주말(토요일=5, 일요일=6) 체크
         if now_kst.weekday() >= 5:
             print("=" * 60)
             print(f"ℹ️  주말에는 점심 식단을 전송하지 않습니다: {date} ({WEEKDAY_NAMES_KR[now_kst.weekday()]}요일)")
             print("=" * 60)
-            return True  # 에러가 아니므로 True 반환
+            return True
     
     print("=" * 60)
     if dry_run:
@@ -185,123 +171,17 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     print("=" * 60)
     
     try:
-        if dry_run:
-            # 테스트 모드: 웹훅 전송 없이 결과만 출력
-            # MattermostSender 없이 직접 파일 읽기 및 메뉴 추출
-            # find_weekly_file 로직 재현
-            dt = datetime.strptime(date, '%Y-%m-%d')
-            days_since_monday = dt.weekday()
-            monday_date = dt - timedelta(days=days_since_monday)
-            
-            file_path = None
-            for day_offset in range(7):
-                check_date = monday_date + timedelta(days=day_offset)
-                check_file = os.path.join(db_path, f"{check_date.strftime('%Y-%m-%d')}.md")
-                if os.path.exists(check_file):
-                    file_path = check_file
-                    break
-            
-            if not file_path:
-                print(f"✗ 날짜 {date}에 해당하는 주간 식단 파일을 찾을 수 없습니다.")
-                return False
-            
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            print(f"✓ 주간 파일 읽기 완료: {file_path}")
-            
-            # extract_daily_menu 로직 재현
-            weekday = WEEKDAY_NAMES_KR[dt.weekday()]
-            target_month = dt.strftime('%m월').lstrip('0')
-            target_day = dt.strftime('%d일').lstrip('0')
-            
-            date_patterns = [
-                f"{dt.strftime('%m월')} {dt.strftime('%d일')}",
-                f"{target_month} {target_day}",
-                f"{dt.strftime('%m월')} {target_day}",
-                f"{target_month} {dt.strftime('%d일')}",
-            ]
-            
-            lines = content.split('\n')
-            header_line = None
-            column_index = -1
-            
-            for i, line in enumerate(lines):
-                if '| 구분 |' in line:
-                    header_line = i
-                    columns = [col.strip() for col in line.split('|')]
-                    
-                    for idx, col in enumerate(columns):
-                        for pattern in date_patterns:
-                            if pattern in col and weekday in col:
-                                column_index = idx
-                                break
-                        if column_index != -1:
-                            break
-                    break
-            
-            if column_index == -1:
-                print(f"✗ 날짜 컬럼을 찾을 수 없습니다: {date}")
-                return False
-            
-            result_lines = []
-            result_lines.append(f"| 구분 | 메뉴 |")
-            result_lines.append(f"| :--- | :--- |")
-            
-            in_table = False
-            for i in range(header_line + 1, len(lines)):
-                line = lines[i].strip()
-                
-                if not line or not line.startswith('|'):
-                    if in_table:
-                        break
-                    continue
-                
-                if '|:---:|' in line or '| :--- |' in line:
-                    in_table = True
-                    continue
-                
-                columns = [col.strip() for col in line.split('|')]
-                
-                if len(columns) > column_index and columns[1]:
-                    category = columns[1]
-                    menu = columns[column_index] if len(columns) > column_index else "-"
-                    
-                    if menu and menu != "-":
-                        result_lines.append(f"| {category} | {menu} |")
-            
-            if len(result_lines) <= 2:
-                print(f"✗ 날짜 {date}의 메뉴를 추출할 수 없습니다.")
-                return False
-            
-            daily_menu = "\n".join(result_lines)
-            
-            print(f"✓ {date} 메뉴 추출 완료")
-            print("\n" + "=" * 60)
-            print(f"📋 추출된 메뉴 (웹훅 전송 없이 확인만)")
-            print("=" * 60)
-            print(f"\n🍽️ **오늘의 점심 메뉴** ({dt.strftime('%m월 %d일')} {weekday}요일)\n")
-            print(daily_menu)
-            print("\n" + "=" * 60)
-            print("💡 실제 전송을 원하시면 --dry-run 옵션 없이 실행하세요.")
-            print("=" * 60)
-            
-            return True
-        else:
-            # 실제 전송 모드
-            sender = MattermostSender()
-            success = sender.load_and_send_daily(date, db_path)
-            
+        sender = MattermostSender()
+        success = sender.load_and_send_daily(date, db_path, dry_run)
+        
+        if not dry_run:
             if success:
                 print("✓ 일일 식단 전송 완료")
             else:
                 print("✗ 일일 식단 전송 실패")
-            
-            return success
+        
+        return success
     
-    except ValueError as e:
-        print(f"✗ 설정 오류: {str(e)}")
-        return False
     except Exception as e:
         print(f"✗ 오류 발생: {str(e)}")
         import traceback
