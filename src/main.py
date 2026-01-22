@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from ocr_processor import OCRProcessor
 from mm_sender import MattermostSender
+from notification_sender import NotificationSender
 
 
 # 요일 이름 상수
@@ -76,9 +77,9 @@ def notify_weekly(date: str = None, db_path: str = "db") -> bool:
         
         print(f"\n1️⃣ 파일 읽기 완료: {file_path}")
         
-        # Mattermost로 주간 식단표 전송
+        # Mattermost와 Discord로 주간 식단표 전송
         print(f"\n2️⃣ 주간 식단표 전송")
-        sender = MattermostSender()
+        sender = NotificationSender()
         success = sender.send_weekly_menu(markdown)
         
         if success:
@@ -122,10 +123,10 @@ def process_image(image_path: str, db_path: str = "db") -> bool:
     print(f"✓ OCR 처리 완료")
     print(f"✓ 파일 저장: {file_path}")
     
-    # 2. Mattermost로 주간 식단표 전송
+    # 2. Mattermost와 Discord로 주간 식단표 전송
     print(f"\n2️⃣ 주간 식단표 전송")
     try:
-        sender = MattermostSender()
+        sender = NotificationSender()
         success = sender.send_weekly_menu(markdown)
         
         if success:
@@ -205,7 +206,7 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     print("=" * 60)
     
     try:
-        sender = MattermostSender(skip_validation=dry_run)
+        sender = NotificationSender(skip_validation=dry_run)
         success = sender.load_and_send_daily(date, db_path, dry_run)
         
         if not dry_run:

@@ -1,6 +1,6 @@
 # SSADAN - SSAFY 식단 알림 봇 🍽️
 
-매주, 매일 Mattermost webhook으로 식단을 알려주는 자동화 봇입니다.
+매주, 매일 Mattermost와 Discord webhook으로 식단을 알려주는 자동화 봇입니다.
 
 ## 프로젝트 구조
 
@@ -15,7 +15,9 @@
 ├── src/                    # 핵심 실행 로직 (Python)
 │   ├── main.py             # 전체 프로세스 제어 (Entry point)
 │   ├── ocr_processor.py    # 이미지 인식 및 Markdown 변환
-│   └── mm_sender.py        # Mattermost 웹훅 발송 로직
+│   ├── mm_sender.py        # Mattermost 웹훅 발송 로직
+│   ├── discord_sender.py   # Discord 웹훅 발송 로직
+│   └── notification_sender.py  # 통합 알림 발송 (Mattermost + Discord)
 ├── requirements.txt        # 필요 라이브러리
 ├── README.md               # 프로젝트 설명
 └── .env.example            # 환경변수 샘플
@@ -25,8 +27,8 @@
 
 1. **이미지 처리 (OCR)**: 식단표를 찍은 이미지에서 식단을 추출해 Markdown 테이블로 변환하고 `db/yyyy-mm-dd.md` 파일로 저장
 2. **파일 확인 및 수정**: OCR 정확도가 완벽하지 않을 수 있으므로 생성된 Markdown 파일을 확인하고 필요시 수정
-3. **주간 알림**: 확인/수정된 파일을 Mattermost webhook으로 1주일치 식단 전송
-4. **일일 알림**: 매일 오전 9시 10분에 그 날 점심 식단을 Mattermost로 전송
+3. **주간 알림**: 확인/수정된 파일을 Mattermost와 Discord webhook으로 1주일치 식단 전송
+4. **일일 알림**: 매일 오전 9시 10분에 그 날 점심 식단을 Mattermost와 Discord로 전송
 
 ## 설치
 
@@ -65,6 +67,9 @@ nano .env
 # Mattermost Webhook URL
 MATTERMOST_WEBHOOK_URL=https://your-mattermost-server.com/hooks/xxx
 
+# Discord Webhook URL (선택사항)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
+
 # Google Cloud Document AI 설정
 GOOGLE_CLOUD_CREDENTIALS={"type":"service_account","project_id":"your-project",...}
 GOOGLE_CLOUD_PROJECT_ID=your-project-id
@@ -72,7 +77,10 @@ GOOGLE_CLOUD_PROCESSOR_ID=your-processor-id
 GOOGLE_CLOUD_LOCATION=us  # 또는 eu, asia 등
 ```
 
-**주의**: `GOOGLE_CLOUD_CREDENTIALS`는 다운로드한 JSON 파일의 내용을 한 줄로 작성합니다.
+**주의**: 
+- `GOOGLE_CLOUD_CREDENTIALS`는 다운로드한 JSON 파일의 내용을 한 줄로 작성합니다.
+- Mattermost 또는 Discord 중 최소 하나의 webhook URL은 설정되어야 합니다.
+- 두 개를 모두 설정하면 양쪽에 동시에 메시지가 전송됩니다.
 
 ## 사용법
 
@@ -120,11 +128,15 @@ python main.py song
 #### 1. GitHub Secrets 설정
 
 Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가:
-- `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용)
+- `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용, 선택사항)
+- `DISCORD_WEBHOOK_URL`: Discord Webhook URL (식단 알림용, 선택사항)
 - `MATTERMOST_TODAY_SONG_URL`: Mattermost Incoming Webhook URL (오늘의 노래 추천용)
 - `GOOGLE_CLOUD_CREDENTIALS`: Google Cloud 서비스 계정 JSON 키 (전체 내용)
 - `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud 프로젝트 ID
 - `GOOGLE_CLOUD_PROCESSOR_ID`: Document AI Processor ID
+- `GOOGLE_CLOUD_LOCATION`: Processor 위치 (예: `us`, `eu`, `asia`)
+
+**참고**: `MATTERMOST_WEBHOOK_URL` 또는 `DISCORD_WEBHOOK_URL` 중 최소 하나는 설정되어야 합니다.
 - `GOOGLE_CLOUD_LOCATION`: Processor 위치 (예: `us`, `eu`, `asia`)
 
 #### 2. 주간 식단표 처리
@@ -176,6 +188,15 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 3. 채널 선택 및 설정
 4. Webhook URL 복사
 5. `.env` 파일 또는 GitHub Secrets에 추가
+
+## Discord Webhook 설정
+
+1. Discord 서버에서 알림을 받을 채널 선택
+2. 채널 설정(⚙️) > 연동 > 웹후크
+3. "새 웹후크" 클릭
+4. 웹후크 이름 설정 (예: "식단봇")
+5. "웹후크 URL 복사" 클릭
+6. `.env` 파일 또는 GitHub Secrets에 추가
 
 ## 커스터마이징
 

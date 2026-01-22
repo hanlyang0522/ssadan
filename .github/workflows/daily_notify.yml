@@ -28,30 +28,37 @@ jobs:
       run: |
         pip install -r requirements.txt
     
-    - name: Validate Mattermost Webhook URL
+    - name: Validate Webhook URLs
       env:
-        WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: |
-        if [ -z "$WEBHOOK_URL" ]; then
-          echo "❌ 오류: MATTERMOST_WEBHOOK_URL secret이 설정되지 않았습니다."
+        if [ -z "$MATTERMOST_WEBHOOK_URL" ] && [ -z "$DISCORD_WEBHOOK_URL" ]; then
+          echo "❌ 오류: MATTERMOST_WEBHOOK_URL 또는 DISCORD_WEBHOOK_URL 중 최소 하나는 설정되어야 합니다."
           echo ""
           echo "다음 단계를 수행하세요:"
           echo "1. GitHub Repository Settings로 이동"
           echo "2. Secrets and variables > Actions 선택"
           echo "3. 'New repository secret' 클릭"
-          echo "4. Name: MATTERMOST_WEBHOOK_URL"
-          echo "5. Value: Mattermost Webhook URL 입력"
+          echo "4. Name: MATTERMOST_WEBHOOK_URL 또는 DISCORD_WEBHOOK_URL"
+          echo "5. Value: Webhook URL 입력"
           echo "6. 'Add secret' 클릭"
           echo ""
           echo "자세한 내용은 README.md 파일을 참조하세요."
           exit 1
         else
-          echo "✅ MATTERMOST_WEBHOOK_URL이 설정되어 있습니다."
+          if [ -n "$MATTERMOST_WEBHOOK_URL" ]; then
+            echo "✅ MATTERMOST_WEBHOOK_URL이 설정되어 있습니다."
+          fi
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            echo "✅ DISCORD_WEBHOOK_URL이 설정되어 있습니다."
+          fi
         fi
     
     - name: Send daily lunch notification
       env:
         MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: |
         cd src
         python main.py daily --db ../db
