@@ -137,7 +137,6 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 - `GOOGLE_CLOUD_LOCATION`: Processor 위치 (예: `us`, `eu`, `asia`)
 
 **참고**: `MATTERMOST_WEBHOOK_URL` 또는 `DISCORD_WEBHOOK_URL` 중 최소 하나는 설정되어야 합니다.
-- `GOOGLE_CLOUD_LOCATION`: Processor 위치 (예: `us`, `eu`, `asia`)
 
 #### 2. 주간 식단표 처리
 
