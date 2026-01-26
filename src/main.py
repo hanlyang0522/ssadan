@@ -187,16 +187,21 @@ def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = Fals
     Returns:
         성공 여부
     """
+    kst = timezone(timedelta(hours=9))
+    
     if date is None:
-        kst = timezone(timedelta(hours=9))
         now_kst = datetime.now(kst)
         date = now_kst.strftime('%Y-%m-%d')
-        
-        if now_kst.weekday() >= 5:
-            print("=" * 60)
-            print(f"ℹ️  주말에는 점심 식단을 전송하지 않습니다: {date} ({WEEKDAY_NAMES_KR[now_kst.weekday()]}요일)")
-            print("=" * 60)
-            return True
+    else:
+        # date가 주어진 경우에도 주말 체크를 위해 datetime 객체로 변환
+        now_kst = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=kst)
+    
+    # 주말 체크 (월~금만 식단 전송)
+    if now_kst.weekday() >= 5:
+        print("=" * 60)
+        print(f"ℹ️  주말에는 점심 식단을 전송하지 않습니다: {date} ({WEEKDAY_NAMES_KR[now_kst.weekday()]}요일)")
+        print("=" * 60)
+        return True
     
     print("=" * 60)
     if dry_run:
