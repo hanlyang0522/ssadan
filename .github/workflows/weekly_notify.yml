@@ -19,7 +19,7 @@ on:
 
 jobs:
   crawl-process:
-    # 웰스토리 API로 식단 크롤링 및 Markdown 저장
+    # welplan.pmh.codes API로 식단 크롤링 및 Markdown 저장
     if: github.event.inputs.step == 'crawl'
     runs-on: ubuntu-latest
     permissions:
@@ -38,27 +38,7 @@ jobs:
       run: |
         pip install -r requirements.txt
     
-    - name: Validate Wellstory credentials
-      env:
-        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
-        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
-        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
-      run: |
-        if [ -z "$WELSTORY_USERNAME" ] || [ -z "$WELSTORY_PASSWORD" ]; then
-          echo "❌ WELSTORY_USERNAME 또는 WELSTORY_PASSWORD secret이 설정되지 않았습니다."
-          exit 1
-        fi
-        if [ -z "$WELSTORY_RESTAURANT_CODE" ]; then
-          echo "❌ WELSTORY_RESTAURANT_CODE secret이 설정되지 않았습니다."
-          exit 1
-        fi
-        echo "✅ 웰스토리 인증 정보 확인 완료"
-    
-    - name: Crawl weekly menu from Wellstory API and save to db/
-      env:
-        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
-        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
-        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+    - name: Crawl weekly menu from welplan.pmh.codes and save to db/
       run: |
         cd src
         python main.py crawl --db ../db

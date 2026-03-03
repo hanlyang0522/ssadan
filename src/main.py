@@ -99,7 +99,7 @@ def notify_weekly(date: str = None, db_path: str = "db") -> bool:
 
 def crawl_weekly(db_path: str = "db") -> bool:
     """
-    웰스토리 API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장
+    welplan.pmh.codes API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장
 
     Args:
         db_path: Markdown 파일 저장 경로
@@ -108,23 +108,19 @@ def crawl_weekly(db_path: str = "db") -> bool:
         성공 여부
     """
     print("=" * 60)
-    print("🔄 웰스토리 API 식단 크롤링 시작")
+    print("🔄 welplan.pmh.codes API 식단 크롤링 시작")
     print("=" * 60)
 
-    try:
-        crawler = WelstoryCrawler()
-    except ValueError as e:
-        print(f"✗ 설정 오류: {str(e)}")
-        return False
+    crawler = WelstoryCrawler()
 
-    print("\n1️⃣  웰스토리 API 로그인 및 주간 식단 조회")
+    print("\n1️⃣  주간 식단 조회 중...")
     markdown, file_path = crawler.process_and_save(db_path)
 
     if not markdown:
         print("✗ 식단 크롤링 실패")
         return False
 
-    print(f"✓ 웰스토리 API 크롤링 완료")
+    print(f"✓ 식단 크롤링 완료")
     print(f"✓ 파일 저장: {file_path}")
     print(f"\n💡 파일을 확인하고 필요시 수정한 후, 'notify' 명령으로 전송하세요.")
     return True
