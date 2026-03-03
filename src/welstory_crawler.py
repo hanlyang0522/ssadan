@@ -165,6 +165,12 @@ class WelstoryCrawler:
 
         weekday_names = ["월", "화", "수", "목", "금", "토", "일"]
 
+        # 주간 제목 생성
+        start_dt = datetime.strptime(dates[0], "%Y-%m-%d")
+        end_dt = datetime.strptime(dates[-1], "%Y-%m-%d")
+        week_info = f"{start_dt.strftime('%m/%d')} ~ {end_dt.strftime('%m/%d')}"
+        title = f"## 🍴 SSAFY 주간메뉴표 ({week_info})\n\n"
+
         # 헤더 행
         header = "| 구분 |"
         separator = "| :--- |"
@@ -193,7 +199,7 @@ class WelstoryCrawler:
             rows.append(row)
 
         lines = [header, separator] + rows
-        return "\n".join(lines) + "\n"
+        return title + "\n".join(lines) + "\n"
 
     def save_to_file(self, markdown_content: str, date_str: str, db_path: str = "db") -> str:
         """

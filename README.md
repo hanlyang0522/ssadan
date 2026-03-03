@@ -9,12 +9,14 @@
 ├── .github/
 │   └── workflows/          # GitHub Actions를 활용한 자동화 스케줄러
 │       ├── daily_notify.yml   # 매일 오전 9시 10분 점심 알림
-│       └── weekly_notify.yml  # 주간 식단표 처리 및 알림
+│       ├── weekly_crawl.yml   # 매주 월요일 웰스토리 API 식단 자동 크롤링
+│       └── weekly_notify.yml  # 주간 식단표 처리 및 알림 (수동 실행)
 ├── db/                     # 추출된 식단 Markdown 파일 저장소 (yyyy-mm-dd.md)
 │   └── .gitkeep
 ├── src/                    # 핵심 실행 로직 (Python)
 │   ├── main.py             # 전체 프로세스 제어 (Entry point)
-│   ├── ocr_processor.py    # 이미지 인식 및 Markdown 변환
+│   ├── welstory_crawler.py # 웰스토리 API 식단 크롤링 및 Markdown 변환
+│   ├── ocr_processor.py    # 이미지 인식 및 Markdown 변환 (OCR 방식)
 │   ├── mm_sender.py        # Mattermost 웹훅 발송 로직
 │   ├── discord_sender.py   # Discord 웹훅 발송 로직
 │   └── notification_sender.py  # 통합 알림 발송 (Mattermost + Discord)
