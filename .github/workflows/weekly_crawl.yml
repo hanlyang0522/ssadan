@@ -1,0 +1,69 @@
+name: Weekly Menu Crawl (Wellstory API)
+
+on:
+  schedule:
+    # 매주 월요일 오전 8시 (KST = UTC+9) 목표
+    # GitHub Actions 스케줄링 지연(~30분)을 고려하여 7시 50분에 예약
+    # UTC 기준 일요일 22시 50분 = KST 월요일 7시 50분
+    # 실제 실행 시간: ~8시 KST
+    - cron: '50 22 * * 0'
+  workflow_dispatch:  # 수동 실행 가능
+
+jobs:
+  crawl-weekly-menu:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to commit and push markdown files
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Validate Wellstory credentials
+      env:
+        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
+        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
+        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+      run: |
+        if [ -z "$WELSTORY_USERNAME" ] || [ -z "$WELSTORY_PASSWORD" ]; then
+          echo "❌ WELSTORY_USERNAME 또는 WELSTORY_PASSWORD secret이 설정되지 않았습니다."
+          exit 1
+        fi
+        if [ -z "$WELSTORY_RESTAURANT_CODE" ]; then
+          echo "❌ WELSTORY_RESTAURANT_CODE secret이 설정되지 않았습니다."
+          exit 1
+        fi
+        echo "✅ 웰스토리 인증 정보 확인 완료"
+
+    - name: Crawl weekly menu from Wellstory API and save to db/
+      env:
+        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
+        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
+        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+      run: |
+        cd src
+        python main.py crawl --db ../db
+
+    - name: Commit and push generated markdown files
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+
+        if find db -name '*.md' -type f | grep -q .; then
+          git add db/*.md
+          git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
+          git push
+          echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
+        else
+          echo "⚠️ db/ 디렉토리에 .md 파일이 없습니다."
+          exit 1
+        fi
