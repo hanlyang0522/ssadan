@@ -176,7 +176,7 @@ class TestWelstoryCrawler(unittest.TestCase):
 
         # 주간 제목 포함 여부
         self.assertIn("## 🍴 SSAFY 주간메뉴표", md)
-        self.assertIn("03/02 ~ 03/06", md)
+        self.assertIn("03월 02일 ~ 03월 06일", md)
         # 헤더 행 포함 여부
         self.assertIn("| 구분 |", md)
         self.assertIn("03월 02일 (월)", md)

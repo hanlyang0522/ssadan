@@ -181,7 +181,7 @@ class WelstoryCrawler:
         # 주간 제목 생성
         start_dt = datetime.strptime(dates[0], "%Y-%m-%d")
         end_dt = datetime.strptime(dates[-1], "%Y-%m-%d")
-        week_info = f"{start_dt.strftime('%m/%d')} ~ {end_dt.strftime('%m/%d')}"
+        week_info = f"{start_dt.strftime('%m월 %d일')} ~ {end_dt.strftime('%m월 %d일')}"
         title = f"## 🍴 SSAFY 주간메뉴표 ({week_info})\n\n"
 
         # 헤더 행
