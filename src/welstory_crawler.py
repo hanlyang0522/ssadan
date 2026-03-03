@@ -1,101 +1,103 @@
-"""웰스토리 API를 통한 식단 데이터 크롤링 및 Markdown 변환"""
+"""웰스토리 식단 데이터 크롤링 및 Markdown 변환 (welplan.pmh.codes API 사용)"""
 import requests
 import os
-import uuid
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
 
 class WelstoryCrawler:
-    """웰스토리 모바일 API를 사용한 식단 데이터 크롤링"""
+    """welplan.pmh.codes API를 통한 멀티캠퍼스 식단 데이터 크롤링 (인증 불필요)"""
 
-    BASE_URL = "https://welplus.welstory.com"
-    USER_AGENT = (
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Welplus/1.01.08"
-    )
+    WELPLAN_BASE_URL = "https://welplan.pmh.codes"
+    DEFAULT_RESTAURANT_QUERY = "멀티캠퍼스"
 
     def __init__(self):
-        self.username = os.getenv("WELSTORY_USERNAME")
-        self.password = os.getenv("WELSTORY_PASSWORD")
-        self.restaurant_code = os.getenv("WELSTORY_RESTAURANT_CODE")
-        self.token = None
-        # 요청마다 고유한 디바이스 ID 생성
-        self.base_headers = {
-            "X-Device-Id": str(uuid.uuid4()).upper(),
-            "X-Autologin": "Y",
-            "User-Agent": self.USER_AGENT,
-        }
-
-        if not self.username or not self.password:
-            raise ValueError(
-                "WELSTORY_USERNAME과 WELSTORY_PASSWORD 환경 변수가 필요합니다."
-            )
-        if not self.restaurant_code:
-            raise ValueError(
-                "WELSTORY_RESTAURANT_CODE 환경 변수가 필요합니다."
-            )
-
-    def login(self) -> bool:
-        """웰스토리 API 로그인 후 토큰 획득"""
-        url = f"{self.BASE_URL}/login"
-        headers = self.base_headers.copy()
-        headers.update(
-            {
-                "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
-                "Authorization": "Bearer null",
-            }
+        self.restaurant_query = os.getenv(
+            "WELSTORY_RESTAURANT_QUERY", self.DEFAULT_RESTAURANT_QUERY
         )
-        data = {
-            "username": self.username,
-            "password": self.password,
-            "remember-me": "true",
-        }
 
+    def _search_restaurant(self) -> Optional[dict]:
+        """식당 검색 후 식당 데이터 반환"""
+        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/search"
         try:
-            response = requests.post(url, headers=headers, data=data, timeout=30)
+            response = requests.post(
+                url,
+                json={"searchQuery": self.restaurant_query},
+                timeout=30,
+            )
             if response.status_code == 200:
-                self.token = response.headers.get("Authorization")
-                print("✓ 웰스토리 로그인 성공")
-                return True
+                restaurants = response.json().get("restaurants", [])
+                if restaurants:
+                    print(f"✓ 식당 검색 성공: {restaurants[0]['name']}")
+                    return restaurants[0]
+                print(f"✗ '{self.restaurant_query}' 식당을 찾을 수 없습니다.")
+                return None
             else:
-                print(f"✗ 웰스토리 로그인 실패: HTTP {response.status_code}")
-                return False
+                print(f"✗ 식당 검색 실패: HTTP {response.status_code}")
+                return None
         except requests.exceptions.RequestException as e:
-            print(f"✗ 웰스토리 로그인 오류: {str(e)}")
-            return False
+            print(f"✗ 식당 검색 오류: {str(e)}")
+            return None
 
-    def fetch_daily_meal_list(self, date: datetime) -> List[dict]:
-        """특정 날짜의 점심 식단 목록 조회"""
-        if not self.token:
-            raise ValueError("로그인이 필요합니다.")
-
-        url = f"{self.BASE_URL}/api/meal"
-        headers = self.base_headers.copy()
-        headers["Authorization"] = self.token
-
-        params = {
-            "menuDt": date.strftime("%Y%m%d"),
-            "menuMealType": "2",  # 2=점심
-            "restaurantCode": self.restaurant_code,
-            "sortingFlag": "",
-            "mainDivRestaurantCode": self.restaurant_code,
-            "activeRestaurantCode": self.restaurant_code,
-        }
-
+    def _get_lunch_meal_time_id(self, restaurant_data: dict) -> Optional[str]:
+        """점심 식사 시간 ID 조회"""
+        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/meal-times"
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response = requests.post(
+                url,
+                json={"restaurantData": restaurant_data},
+                timeout=30,
+            )
             if response.status_code == 200:
-                data = response.json()
-                return data.get("data", {}).get("mealList", [])
+                meal_times = response.json().get("mealTimes", [])
+                for mt in meal_times:
+                    name = mt.get("name", "")
+                    if any(kw in name for kw in ["중식", "점심", "Lunch"]):
+                        print(f"✓ 점심 식사 시간: {name} (ID: {mt['id']})")
+                        return mt["id"]
+                # 점심 키워드를 찾지 못하면 첫 번째 사용
+                if meal_times:
+                    first = meal_times[0]
+                    print(f"⚠️  점심 식사 시간 미확인, 첫 번째 사용: {first['name']}")
+                    return first["id"]
+                print("✗ 식사 시간 정보가 없습니다.")
+                return None
             else:
-                print(f"⚠️  {date.strftime('%Y-%m-%d')} 식단 조회 실패: HTTP {response.status_code}")
+                print(f"✗ 식사 시간 조회 실패: HTTP {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"✗ 식사 시간 조회 오류: {str(e)}")
+            return None
+
+    def fetch_daily_meal_list(
+        self, date: datetime, restaurant_data: dict, meal_time_id: str
+    ) -> List[dict]:
+        """특정 날짜의 점심 식단 목록 조회"""
+        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/meals"
+        try:
+            response = requests.post(
+                url,
+                json={
+                    "restaurantData": restaurant_data,
+                    "date": date.strftime("%Y%m%d"),
+                    "mealTimeId": meal_time_id,
+                },
+                timeout=30,
+            )
+            if response.status_code == 200:
+                return response.json().get("meals", [])
+            else:
+                print(
+                    f"⚠️  {date.strftime('%Y-%m-%d')} 식단 조회 실패: HTTP {response.status_code}"
+                )
                 return []
         except requests.exceptions.RequestException as e:
             print(f"⚠️  {date.strftime('%Y-%m-%d')} 식단 조회 오류: {str(e)}")
             return []
 
-    def fetch_weekly_meal_data(self, reference_date: Optional[datetime] = None) -> Dict[str, Dict[str, str]]:
+    def fetch_weekly_meal_data(
+        self, reference_date: Optional[datetime] = None
+    ) -> Dict[str, Dict[str, str]]:
         """
         한 주(월~금)의 식단 데이터 조회
 
@@ -113,6 +115,16 @@ class WelstoryCrawler:
         days_since_monday = reference_date.weekday()
         monday = reference_date - timedelta(days=days_since_monday)
 
+        # 식당 검색
+        restaurant_data = self._search_restaurant()
+        if not restaurant_data:
+            return {}
+
+        # 점심 식사 시간 ID 조회
+        meal_time_id = self._get_lunch_meal_time_id(restaurant_data)
+        if not meal_time_id:
+            return {}
+
         meal_data: Dict[str, Dict[str, str]] = {}
 
         for day_offset in range(5):  # 월~금
@@ -121,17 +133,18 @@ class WelstoryCrawler:
             meal_data[date_str] = {}
 
             print(f"  📡 {date_str} 식단 조회 중...")
-            meal_list = self.fetch_daily_meal_list(day)
+            meal_list = self.fetch_daily_meal_list(day, restaurant_data, meal_time_id)
 
             for meal in meal_list:
-                course_txt = meal.get("courseTxt", "").strip()
-                if not course_txt:
+                # welplan API: menuCourseName = 코너명(courseTxt), name = 메뉴명(menuName)
+                course_name = meal.get("menuCourseName", "").strip()
+                if not course_name:
                     continue
 
-                menu_name = meal.get("menuName", "").strip()
-                sub_menu_txt = meal.get("subMenuTxt", "").strip()
+                menu_name = meal.get("name", "").strip()
+                sub_menu_txt = meal.get("subMenuTxt") or ""
+                sub_menu_txt = sub_menu_txt.strip()
 
-                # 메뉴명과 구성 항목 합치기
                 parts = []
                 if menu_name:
                     parts.append(menu_name)
@@ -142,7 +155,7 @@ class WelstoryCrawler:
                         if item.strip()
                     )
 
-                meal_data[date_str][course_txt] = ", ".join(parts)
+                meal_data[date_str][course_name] = ", ".join(parts)
 
         return meal_data
 
@@ -164,6 +177,12 @@ class WelstoryCrawler:
             return "식단 데이터가 없습니다."
 
         weekday_names = ["월", "화", "수", "목", "금", "토", "일"]
+
+        # 주간 제목 생성
+        start_dt = datetime.strptime(dates[0], "%Y-%m-%d")
+        end_dt = datetime.strptime(dates[-1], "%Y-%m-%d")
+        week_info = f"{start_dt.strftime('%m월 %d일')} ~ {end_dt.strftime('%m월 %d일')}"
+        title = f"## 🍴 SSAFY 주간메뉴표 ({week_info})\n\n"
 
         # 헤더 행
         header = "| 구분 |"
@@ -193,7 +212,7 @@ class WelstoryCrawler:
             rows.append(row)
 
         lines = [header, separator] + rows
-        return "\n".join(lines) + "\n"
+        return title + "\n".join(lines) + "\n"
 
     def save_to_file(self, markdown_content: str, date_str: str, db_path: str = "db") -> str:
         """
@@ -218,16 +237,12 @@ class WelstoryCrawler:
 
     def process_and_save(self, db_path: str = "db") -> Tuple[str, str]:
         """
-        웰스토리 API로 이번 주 식단 조회, Markdown 변환, 파일 저장
+        welplan.pmh.codes API로 이번 주 식단 조회, Markdown 변환, 파일 저장
 
         Returns:
             (markdown_content, file_path) 튜플. 실패 시 ("", "")
         """
-        # 1. 로그인
-        if not self.login():
-            return "", ""
-
-        # 2. 주간 식단 조회
+        # 1. 주간 식단 조회
         kst = timezone(timedelta(hours=9))
         today = datetime.now(kst)
         days_since_monday = today.weekday()
@@ -241,10 +256,10 @@ class WelstoryCrawler:
 
         print(f"✓ {len(meal_data)}개 날짜의 식단 조회 완료")
 
-        # 3. Markdown 변환
+        # 2. Markdown 변환
         markdown = self.convert_to_markdown(meal_data)
 
-        # 4. 월요일 날짜를 파일 이름으로 저장
+        # 3. 월요일 날짜를 파일 이름으로 저장
         monday_str = monday.strftime("%Y-%m-%d")
         file_path = self.save_to_file(markdown, monday_str, db_path)
 

@@ -9,12 +9,14 @@
 ├── .github/
 │   └── workflows/          # GitHub Actions를 활용한 자동화 스케줄러
 │       ├── daily_notify.yml   # 매일 오전 9시 10분 점심 알림
-│       └── weekly_notify.yml  # 주간 식단표 처리 및 알림
+│       ├── weekly_crawl.yml   # 매주 월요일 웰스토리 API 식단 자동 크롤링
+│       └── weekly_notify.yml  # 주간 식단표 처리 및 알림 (수동 실행)
 ├── db/                     # 추출된 식단 Markdown 파일 저장소 (yyyy-mm-dd.md)
 │   └── .gitkeep
 ├── src/                    # 핵심 실행 로직 (Python)
 │   ├── main.py             # 전체 프로세스 제어 (Entry point)
-│   ├── ocr_processor.py    # 이미지 인식 및 Markdown 변환
+│   ├── welstory_crawler.py # 웰스토리 API 식단 크롤링 및 Markdown 변환
+│   ├── ocr_processor.py    # 이미지 인식 및 Markdown 변환 (OCR 방식)
 │   ├── mm_sender.py        # Mattermost 웹훅 발송 로직
 │   ├── discord_sender.py   # Discord 웹훅 발송 로직
 │   └── notification_sender.py  # 통합 알림 발송 (Mattermost + Discord)
@@ -25,13 +27,13 @@
 
 ## 작동 방법
 
-1. **식단 크롤링 (API)**: 웰스토리 API에서 한 주(월~금)의 식단 데이터를 가져와 `db/yyyy-mm-dd.md` 파일로 저장
+1. **식단 크롤링 (API)**: [welplan.pmh.codes](https://welplan.pmh.codes)에서 멀티캠퍼스 한 주(월~금)의 식단 데이터를 가져와 `db/yyyy-mm-dd.md` 파일로 저장
 2. **파일 확인 및 수정**: 생성된 Markdown 파일을 확인하고 필요시 수정
 3. **주간 알림**: 확인/수정된 파일을 Mattermost와 Discord webhook으로 1주일치 식단 전송
 4. **일일 알림**: 매일 오전 9시 10분에 그 날 점심 식단을 Mattermost와 Discord로 전송
 
-> **기존 방식 (OCR)**: 식단표 이미지에서 Google Document AI로 데이터 추출 (이미지 OCR 방식)  
-> **개선된 방식 (API)**: 웰스토리(welplus.welstory.com) 모바일 API에서 직접 데이터 조회
+> **개선된 방식 (API)**: [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 멀티캠퍼스 식단 데이터 조회 (계정 정보 불필요)  
+> **기존 방식 (OCR)**: 식단표 이미지에서 Google Document AI로 데이터 추출 (이미지 OCR 방식)
 
 ## 설치
 
@@ -42,14 +44,15 @@
 pip install -r requirements.txt
 ```
 
-### 2. 웰스토리 API 설정 (권장: API 크롤링 방식)
+### 2. 식단 크롤링 설정 (welplan.pmh.codes API - 인증 불필요)
 
-웰스토리(welplus.welstory.com) 계정이 필요합니다.
+식단 크롤링은 [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 멀티캠퍼스 식단을 가져옵니다.  
+별도의 계정 정보 없이 API를 호출하므로 추가 설정이 필요하지 않습니다.
 
-1. `WELSTORY_USERNAME`: 웰스토리 앱/웹 로그인 아이디
-2. `WELSTORY_PASSWORD`: 웰스토리 앱/웹 로그인 비밀번호
-3. `WELSTORY_RESTAURANT_CODE`: 식당 코드 (예: `REST000595`)
-   - 식당 코드는 웰스토리 앱에서 조회하거나 시스템 관리자에게 문의하세요.
+식당 이름을 변경하려면 `.env` 파일에 다음을 추가하세요:
+```bash
+WELSTORY_RESTAURANT_QUERY=멀티캠퍼스  # 기본값, 변경 필요 시만 설정
+```
 
 ### 3. Google Cloud 설정 (선택: OCR 방식 사용 시)
 
@@ -82,10 +85,8 @@ MATTERMOST_WEBHOOK_URL=https://your-mattermost-server.com/hooks/xxx
 # Discord Webhook URL (선택사항)
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 
-# 웰스토리 API 설정 (식단 크롤링용)
-WELSTORY_USERNAME=your-welstory-username
-WELSTORY_PASSWORD=your-welstory-password
-WELSTORY_RESTAURANT_CODE=your-restaurant-code
+# 식당 검색어 (기본값: 멀티캠퍼스, 변경 필요 시만 설정)
+# WELSTORY_RESTAURANT_QUERY=멀티캠퍼스
 
 # Google Cloud Document AI 설정 (OCR 방식 사용 시)
 GOOGLE_CLOUD_CREDENTIALS={"type":"service_account","project_id":"your-project",...}
@@ -155,13 +156,13 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 - `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용, 선택사항)
 - `DISCORD_WEBHOOK_URL`: Discord Webhook URL (식단 알림용, 선택사항)
 - `MATTERMOST_TODAY_SONG_URL`: Mattermost Incoming Webhook URL (오늘의 노래 추천용)
-- `WELSTORY_USERNAME`: 웰스토리 로그인 아이디 (API 크롤링용)
-- `WELSTORY_PASSWORD`: 웰스토리 로그인 비밀번호 (API 크롤링용)
-- `WELSTORY_RESTAURANT_CODE`: 웰스토리 식당 코드 (API 크롤링용)
 - `GOOGLE_CLOUD_CREDENTIALS`: Google Cloud 서비스 계정 JSON 키 (OCR 방식 사용 시)
 - `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud 프로젝트 ID (OCR 방식 사용 시)
 - `GOOGLE_CLOUD_PROCESSOR_ID`: Document AI Processor ID (OCR 방식 사용 시)
 - `GOOGLE_CLOUD_LOCATION`: Processor 위치 (OCR 방식 사용 시, 예: `us`, `eu`, `asia`)
+
+> **참고**: 식단 크롤링은 [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 인증 없이 진행됩니다.  
+> 별도의 웰스토리 계정 정보(WELSTORY_USERNAME 등)는 필요하지 않습니다.
 
 **참고**: `MATTERMOST_WEBHOOK_URL` 또는 `DISCORD_WEBHOOK_URL` 중 최소 하나는 설정되어야 합니다.
 
@@ -233,7 +234,9 @@ Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가
 
 ## 커스터마이징
 
-API 응답의 코너명(`courseTxt`)이 원하는 형식과 다를 경우, `src/welstory_crawler.py`의 `fetch_weekly_meal_data()` 메서드에서 데이터를 가공하세요.
+welplan.pmh.codes API 응답의 코너명(`menuCourseName`)이 원하는 형식과 다를 경우, `src/welstory_crawler.py`의 `fetch_weekly_meal_data()` 메서드에서 `meal.get("menuCourseName")` 처리 부분을 수정하세요.
+
+다른 식당의 식단을 사용하려면 `WELSTORY_RESTAURANT_QUERY` 환경변수를 설정하세요 (기본값: `멀티캠퍼스`).
 
 OCR 방식을 사용하는 경우, 실제 식단표 형식에 맞게 `src/ocr_processor.py`의 `_parse_ocr_text()` 메서드를 수정하세요.
 

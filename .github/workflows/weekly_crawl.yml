@@ -28,27 +28,7 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Validate Wellstory credentials
-      env:
-        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
-        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
-        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
-      run: |
-        if [ -z "$WELSTORY_USERNAME" ] || [ -z "$WELSTORY_PASSWORD" ]; then
-          echo "❌ WELSTORY_USERNAME 또는 WELSTORY_PASSWORD secret이 설정되지 않았습니다."
-          exit 1
-        fi
-        if [ -z "$WELSTORY_RESTAURANT_CODE" ]; then
-          echo "❌ WELSTORY_RESTAURANT_CODE secret이 설정되지 않았습니다."
-          exit 1
-        fi
-        echo "✅ 웰스토리 인증 정보 확인 완료"
-
-    - name: Crawl weekly menu from Wellstory API and save to db/
-      env:
-        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
-        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
-        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+    - name: Crawl weekly menu from welplan.pmh.codes and save to db/
       run: |
         cd src
         python main.py crawl --db ../db
@@ -61,6 +41,7 @@ jobs:
         if find db -name '*.md' -type f | grep -q .; then
           git add db/*.md
           git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
+          git pull --rebase origin HEAD
           git push
           echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
         else
