@@ -29,6 +29,8 @@ jobs:
         cd src
         python3 - <<'EOF'
         import sys
+        import json
+        from datetime import datetime, timezone, timedelta
         from welstory_crawler import WelstoryCrawler
 
         print("=" * 60)
@@ -42,6 +44,7 @@ jobs:
         if not restaurant:
             print("✗ 식당 검색 실패")
             sys.exit(1)
+        print(f"   식당 데이터: {json.dumps(restaurant, ensure_ascii=False)}")
 
         print(f"\n2️⃣  점심 식사 시간 조회 중...")
         meal_time_id = crawler._get_lunch_meal_time_id(restaurant)
@@ -49,7 +52,21 @@ jobs:
             print("✗ 식사 시간 조회 실패")
             sys.exit(1)
 
-        print(f"\n3️⃣  이번 주(월~금) 식단 조회 중...")
+        print(f"\n3️⃣  이번 주 월요일 식단 원본 API 응답 확인 (실제 코스명 검증)...")
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(kst)
+        days_since_monday = today.weekday()
+        monday = today - timedelta(days=days_since_monday)
+        raw_meals = crawler.fetch_daily_meal_list(monday, restaurant, meal_time_id)
+
+        if not raw_meals:
+            print("⚠️  데이터 없음 (주말이거나 식단 미등록)")
+        else:
+            print(f"   API 원본 응답 (meals 배열, {len(raw_meals)}개 항목):")
+            for i, meal in enumerate(raw_meals):
+                print(f"   [{i}] menuCourseName={meal.get('menuCourseName')!r}  name={meal.get('name')!r}  subMenuTxt={meal.get('subMenuTxt')!r}")
+
+        print(f"\n4️⃣  이번 주(월~금) 전체 식단 조회 중...")
         meal_data = crawler.fetch_weekly_meal_data()
 
         if not meal_data or not any(meal_data[d] for d in meal_data):
@@ -60,9 +77,9 @@ jobs:
         for date, menus in sorted(meal_data.items()):
             print(f"  {date}: {len(menus)}개 코너")
             for course, menu in menus.items():
-                print(f"    - {course}: {menu[:40]}{'...' if len(menu) > 40 else ''}")
+                print(f"    - {course}: {menu[:50]}{'...' if len(menu) > 50 else ''}")
 
-        print("\n4️⃣  Markdown 변환 결과:")
+        print("\n5️⃣  Markdown 변환 결과:")
         print("=" * 60)
         md = crawler.convert_to_markdown(meal_data)
         print(md)
