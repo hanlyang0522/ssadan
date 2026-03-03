@@ -1,0 +1,71 @@
+name: Test Welplan API Crawling
+
+on:
+  workflow_dispatch:  # 수동 실행만 가능
+
+jobs:
+  test-crawl:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run unit tests (mock)
+      run: |
+        cd src
+        python3 -m pytest test_welstory_crawler.py -v
+
+    - name: Test real API - fetch this week's meal data
+      run: |
+        cd src
+        python3 - <<'EOF'
+        import sys
+        from welstory_crawler import WelstoryCrawler
+
+        print("=" * 60)
+        print("🔄 welplan.pmh.codes 실제 API 크롤링 테스트")
+        print("=" * 60)
+
+        crawler = WelstoryCrawler()
+
+        print("\n1️⃣  식당 검색 중...")
+        restaurant = crawler._search_restaurant()
+        if not restaurant:
+            print("✗ 식당 검색 실패")
+            sys.exit(1)
+
+        print(f"\n2️⃣  점심 식사 시간 조회 중...")
+        meal_time_id = crawler._get_lunch_meal_time_id(restaurant)
+        if not meal_time_id:
+            print("✗ 식사 시간 조회 실패")
+            sys.exit(1)
+
+        print(f"\n3️⃣  이번 주(월~금) 식단 조회 중...")
+        meal_data = crawler.fetch_weekly_meal_data()
+
+        if not meal_data or not any(meal_data[d] for d in meal_data):
+            print("✗ 식단 데이터 없음")
+            sys.exit(1)
+
+        print(f"\n✓ {len(meal_data)}개 날짜 조회 완료")
+        for date, menus in sorted(meal_data.items()):
+            print(f"  {date}: {len(menus)}개 코너")
+            for course, menu in menus.items():
+                print(f"    - {course}: {menu[:40]}{'...' if len(menu) > 40 else ''}")
+
+        print("\n4️⃣  Markdown 변환 결과:")
+        print("=" * 60)
+        md = crawler.convert_to_markdown(meal_data)
+        print(md)
+
+        print("✓ 크롤링 테스트 성공!")
+        EOF
