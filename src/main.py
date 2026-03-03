@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from ocr_processor import OCRProcessor
 from mm_sender import MattermostSender
 from notification_sender import NotificationSender
+from welstory_crawler import WelstoryCrawler
 
 
 # 요일 이름 상수
@@ -94,6 +95,39 @@ def notify_weekly(date: str = None, db_path: str = "db") -> bool:
         import traceback
         traceback.print_exc()
         return False
+
+
+def crawl_weekly(db_path: str = "db") -> bool:
+    """
+    웰스토리 API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장
+
+    Args:
+        db_path: Markdown 파일 저장 경로
+
+    Returns:
+        성공 여부
+    """
+    print("=" * 60)
+    print("🔄 웰스토리 API 식단 크롤링 시작")
+    print("=" * 60)
+
+    try:
+        crawler = WelstoryCrawler()
+    except ValueError as e:
+        print(f"✗ 설정 오류: {str(e)}")
+        return False
+
+    print("\n1️⃣  웰스토리 API 로그인 및 주간 식단 조회")
+    markdown, file_path = crawler.process_and_save(db_path)
+
+    if not markdown:
+        print("✗ 식단 크롤링 실패")
+        return False
+
+    print(f"✓ 웰스토리 API 크롤링 완료")
+    print(f"✓ 파일 저장: {file_path}")
+    print(f"\n💡 파일을 확인하고 필요시 수정한 후, 'notify' 명령으로 전송하세요.")
+    return True
 
 
 def process_image(image_path: str, db_path: str = "db") -> bool:
@@ -244,6 +278,9 @@ def main():
   # 이미지 OCR 처리만 수행 (웹훅 전송 없음)
   python main.py ocr --image meal.jpg
   
+  # 웰스토리 API로 이번 주 식단 크롤링 (웹훅 전송 없음)
+  python main.py crawl
+  
   # 저장된 파일로 주간 식단표 전송
   python main.py notify --date 2026-01-15
   
@@ -266,6 +303,10 @@ def main():
     ocr_parser = subparsers.add_parser('ocr', help='이미지 OCR 처리만 수행 (웹훅 전송 없음)')
     ocr_parser.add_argument('--image', required=True, help='식단표 이미지 파일 경로')
     ocr_parser.add_argument('--db', default='db', help='Markdown 파일 저장 경로 (기본값: db)')
+    
+    # crawl 명령
+    crawl_parser = subparsers.add_parser('crawl', help='웰스토리 API로 이번 주 식단 크롤링 (웹훅 전송 없음)')
+    crawl_parser.add_argument('--db', default='db', help='Markdown 파일 저장 경로 (기본값: db)')
     
     # notify 명령 (새로 추가)
     notify_parser = subparsers.add_parser('notify', help='저장된 파일로 주간 식단표 전송')
@@ -294,6 +335,10 @@ def main():
         
         elif args.command == 'ocr':
             success = ocr_only(args.image, args.db)
+            return 0 if success else 1
+        
+        elif args.command == 'crawl':
+            success = crawl_weekly(args.db)
             return 0 if success else 1
         
         elif args.command == 'notify':

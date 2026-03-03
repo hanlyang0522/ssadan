@@ -4,19 +4,82 @@ on:
   workflow_dispatch:  # 수동 실행 (이미지 업로드 후 실행)
     inputs:
       image_path:
-        description: '식단표 이미지 경로'
-        required: true
+        description: '식단표 이미지 경로 (ocr 단계 선택 시 필요)'
+        required: false
         default: 'meal_schedule.jpg'
       step:
-        description: '실행할 단계 (ocr: OCR 처리만, notify: 전송만)'
+        description: '실행할 단계 (crawl: API 크롤링, ocr: OCR 처리, notify: 전송만)'
         required: true
-        default: 'ocr'
+        default: 'crawl'
         type: choice
         options:
+          - crawl
           - ocr
           - notify
 
 jobs:
+  crawl-process:
+    # 웰스토리 API로 식단 크롤링 및 Markdown 저장
+    if: github.event.inputs.step == 'crawl'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to commit and push markdown files
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Validate Wellstory credentials
+      env:
+        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
+        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
+        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+      run: |
+        if [ -z "$WELSTORY_USERNAME" ] || [ -z "$WELSTORY_PASSWORD" ]; then
+          echo "❌ WELSTORY_USERNAME 또는 WELSTORY_PASSWORD secret이 설정되지 않았습니다."
+          exit 1
+        fi
+        if [ -z "$WELSTORY_RESTAURANT_CODE" ]; then
+          echo "❌ WELSTORY_RESTAURANT_CODE secret이 설정되지 않았습니다."
+          exit 1
+        fi
+        echo "✅ 웰스토리 인증 정보 확인 완료"
+    
+    - name: Crawl weekly menu from Wellstory API and save to db/
+      env:
+        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
+        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
+        WELSTORY_RESTAURANT_CODE: ${{ secrets.WELSTORY_RESTAURANT_CODE }}
+      run: |
+        cd src
+        python main.py crawl --db ../db
+    
+    - name: Commit and push generated markdown files
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # db/ 디렉토리의 .md 파일이 있는지 확인
+        if find db -name '*.md' -type f | grep -q .; then
+          git add db/*.md
+          git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
+          git push
+          echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
+        else
+          echo "⚠️ db/ 디렉토리에 .md 파일이 없습니다."
+          echo "크롤링이 실패했거나 파일 생성에 문제가 있을 수 있습니다."
+          exit 1
+        fi
+
   ocr-process:
     # OCR 처리 및 Markdown 저장 (웹훅 전송 없음)
     if: github.event.inputs.step == 'ocr'
