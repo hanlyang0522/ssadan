@@ -57,6 +57,24 @@ MOCK_MEALS_RESPONSE = {
     "cached": False
 }
 
+MOCK_MEALS_RESPONSE_WITH_DUPLICATE_FIRST_ITEM = {
+    "success": True,
+    "meals": [
+        {
+            "hallNo": "1",
+            "date": 20260302,
+            "mealTimeId": "2",
+            "name": "부대찌개",
+            "menuCourseName": "20F 일반식 (A. 한식)",
+            "menuCourseType": "A",
+            "setName": "부대찌개세트",
+            "subMenuTxt": "부대찌개, 현미밥, 배추김치, 계란말이",
+            "photoUrl": ""
+        }
+    ],
+    "cached": False
+}
+
 
 def make_mock_response(data, status_code=200):
     """requests.Response 모의 객체 생성"""
@@ -155,6 +173,29 @@ class TestWelstoryCrawler(unittest.TestCase):
         # 코너명 및 메뉴 확인
         self.assertIn("20F 일반식 (A. 한식)", result["2026-03-02"])
         self.assertEqual(result["2026-03-02"]["20F 일반식 (A. 한식)"], "부대찌개, 현미밥, 배추김치, 계란말이")
+
+    @patch("welstory_crawler.requests.post")
+    def test_fetch_weekly_meal_data_remove_duplicate_first_item(self, mock_post):
+        """menu name과 subMenuTxt 첫 항목이 같을 때 중복 제거"""
+
+        def side_effect(url, **kwargs):
+            if "search" in url:
+                return make_mock_response(MOCK_RESTAURANT_RESPONSE)
+            elif "meal-times" in url:
+                return make_mock_response(MOCK_MEAL_TIMES_RESPONSE)
+            else:
+                return make_mock_response(MOCK_MEALS_RESPONSE_WITH_DUPLICATE_FIRST_ITEM)
+
+        mock_post.side_effect = side_effect
+
+        kst = timezone(timedelta(hours=9))
+        ref_date = datetime(2026, 3, 2, tzinfo=kst)
+        result = self.crawler.fetch_weekly_meal_data(ref_date)
+
+        self.assertEqual(
+            result["2026-03-02"]["20F 일반식 (A. 한식)"],
+            "부대찌개, 현미밥, 배추김치, 계란말이"
+        )
 
     @patch("welstory_crawler.requests.post")
     def test_fetch_weekly_meal_data_no_restaurant(self, mock_post):

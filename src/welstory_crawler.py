@@ -145,19 +145,36 @@ class WelstoryCrawler:
                 sub_menu_txt = meal.get("subMenuTxt") or ""
                 sub_menu_txt = sub_menu_txt.strip()
 
-                parts = []
-                if menu_name:
-                    parts.append(menu_name)
-                if sub_menu_txt:
-                    parts.extend(
-                        item.strip()
-                        for item in sub_menu_txt.split(",")
-                        if item.strip()
-                    )
-
-                meal_data[date_str][course_name] = ", ".join(parts)
+                meal_data[date_str][course_name] = self._merge_menu_parts(
+                    menu_name,
+                    sub_menu_txt,
+                )
 
         return meal_data
+
+    @staticmethod
+    def _merge_menu_parts(menu_name: str, sub_menu_txt: str) -> str:
+        """메뉴명과 서브메뉴를 순서대로 병합하고 중복 항목 제거"""
+        parts: List[str] = []
+
+        if menu_name:
+            parts.append(menu_name)
+
+        if sub_menu_txt:
+            parts.extend(
+                item.strip()
+                for item in sub_menu_txt.split(",")
+                if item.strip()
+            )
+
+        unique_parts: List[str] = []
+        seen = set()
+        for part in parts:
+            if part not in seen:
+                unique_parts.append(part)
+                seen.add(part)
+
+        return ", ".join(unique_parts)
 
     def convert_to_markdown(self, meal_data: Dict[str, Dict[str, str]]) -> str:
         """
