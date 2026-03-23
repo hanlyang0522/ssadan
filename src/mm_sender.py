@@ -73,19 +73,6 @@ class MattermostSender:
         
         return False
     
-    def send_weekly_menu(self, markdown_content: str) -> bool:
-        """
-        주간 식단표 전송
-        
-        Args:
-            markdown_content: Markdown 형식의 주간 식단표
-        
-        Returns:
-            성공 여부
-        """
-        message = f"📅 **주간 식단표**\n\n{markdown_content}"
-        return self.send_message(message)
-    
     def send_today_song_request(self) -> bool:
         """
         오늘의 노래 추천 요청 메시지 전송

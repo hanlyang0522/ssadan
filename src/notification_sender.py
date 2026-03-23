@@ -1,7 +1,7 @@
 """Mattermost와 Discord 통합 알림 발송"""
 import os
 from typing import Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from mm_sender import MattermostSender
 from discord_sender import DiscordSender
@@ -57,56 +57,12 @@ class NotificationSender:
         """
         results = []
         
-        # Mattermost로 전송
         if self.mattermost_sender:
             result = self.mattermost_sender.send_message(text, username)
             results.append(result)
         
-        # Discord로 전송
         if self.discord_sender:
             result = self.discord_sender.send_message(text, username)
-            results.append(result)
-        
-        # 최소 하나라도 성공하면 True
-        return any(results) if results else False
-    
-    def send_weekly_menu(self, markdown_content: str) -> bool:
-        """
-        주간 식단표 전송
-        
-        Args:
-            markdown_content: Markdown 형식의 주간 식단표
-        
-        Returns:
-            성공 여부
-        """
-        results = []
-        
-        if self.mattermost_sender:
-            result = self.mattermost_sender.send_weekly_menu(markdown_content)
-            results.append(result)
-        
-        if self.discord_sender:
-            result = self.discord_sender.send_weekly_menu(markdown_content)
-            results.append(result)
-        
-        return any(results) if results else False
-    
-    def send_today_song_request(self) -> bool:
-        """
-        오늘의 노래 추천 요청 메시지 전송
-        
-        Returns:
-            성공 여부
-        """
-        results = []
-        
-        if self.mattermost_sender:
-            result = self.mattermost_sender.send_today_song_request()
-            results.append(result)
-        
-        if self.discord_sender:
-            result = self.discord_sender.send_today_song_request()
             results.append(result)
         
         return any(results) if results else False
@@ -137,7 +93,6 @@ class NotificationSender:
     def find_weekly_file(self, date: str, db_path: str = "db") -> Optional[str]:
         """
         주어진 날짜가 포함된 주간 식단 파일 찾기
-        (MattermostSender의 메서드를 재사용)
         
         Args:
             date: 날짜 (YYYY-MM-DD)
@@ -153,7 +108,6 @@ class NotificationSender:
     def extract_daily_menu(self, markdown_content: str, target_date: str) -> Optional[str]:
         """
         주간 식단 마크다운에서 특정 날짜의 메뉴만 추출
-        (MattermostSender의 메서드를 재사용)
         
         Args:
             markdown_content: 전체 주간 식단 마크다운
@@ -178,9 +132,7 @@ class NotificationSender:
         Returns:
             성공 여부
         """
-        # MattermostSender의 로직을 재사용하되, 전송은 통합 sender 사용
         if not self.mattermost_sender:
-            # Mattermost sender가 없으면 임시로 생성 (파일 찾기/파싱용)
             temp_sender = MattermostSender(skip_validation=True)
             file_path = temp_sender.find_weekly_file(date, db_path)
         else:
