@@ -3,7 +3,7 @@ import requests
 import os
 import time
 from typing import Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 
 class MattermostSender:
@@ -72,39 +72,6 @@ class MattermostSender:
                 return False
         
         return False
-    
-    def send_weekly_menu(self, markdown_content: str) -> bool:
-        """
-        주간 식단표 전송
-        
-        Args:
-            markdown_content: Markdown 형식의 주간 식단표
-        
-        Returns:
-            성공 여부
-        """
-        message = f"📅 **주간 식단표**\n\n{markdown_content}"
-        return self.send_message(message)
-    
-    def send_today_song_request(self) -> bool:
-        """
-        오늘의 노래 추천 요청 메시지 전송
-        
-        Returns:
-            성공 여부
-        """
-        # 한국 시간대(KST, UTC+9) 사용
-        kst = timezone(timedelta(hours=9))
-        now = datetime.now(kst)
-        weekday_kr = ['월', '화', '수', '목', '금', '토', '일'][now.weekday()]
-        date_str = now.strftime(f'%Y년 %m월 %d일 ({weekday_kr})')
-        
-        message = f"""### 🎵 오늘의 노래 추천        
-**{date_str}**
-
-안녕하세요! 오늘 하루를 함께할 노래를 추천해주세요~ 🎧✨
- 🎼 음악과 함께하는 즐거운 하루 되세요!"""
-        return self.send_message(message, username="노래봇")
     
     def send_daily_menu(self, date: str, menu_content: str) -> bool:
         """
