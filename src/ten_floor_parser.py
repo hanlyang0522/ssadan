@@ -54,7 +54,7 @@ def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dic
     mime_type = mime_map.get(ext, "image/jpeg")
 
     response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash",
         contents=[
             types.Part.from_bytes(data=image_data, mime_type=mime_type),
             _PARSE_PROMPT,

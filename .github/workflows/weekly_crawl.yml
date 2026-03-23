@@ -46,7 +46,7 @@ jobs:
         if find db -name '*.md' -type f | grep -q .; then
           git add db/*.md
           git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
-          git pull --rebase origin HEAD
+          git pull --rebase origin "${{ github.ref_name }}"
           git push
           echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
         else
