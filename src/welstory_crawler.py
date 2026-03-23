@@ -10,6 +10,8 @@ class WelstoryCrawler:
 
     WELPLAN_BASE_URL = "https://welplan.pmh.codes"
     DEFAULT_RESTAURANT_QUERY = "멀티캠퍼스"
+    FLOOR_10_COURSES = ["10F 공존 (도시락)", "10F 공존 (브런치)", "10F 공존 (샐러드)"]
+    FLOOR_10_PLACEHOLDER = "준비중..."
 
     def __init__(self):
         self.restaurant_query = os.getenv(
@@ -149,6 +151,10 @@ class WelstoryCrawler:
                     menu_name,
                     sub_menu_txt,
                 )
+
+            # 10F 공존 코너는 API 미제공으로 '준비중...' 처리
+            for course in self.FLOOR_10_COURSES:
+                meal_data[date_str][course] = self.FLOOR_10_PLACEHOLDER
 
         return meal_data
 

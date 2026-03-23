@@ -173,6 +173,10 @@ class TestWelstoryCrawler(unittest.TestCase):
         # 코너명 및 메뉴 확인
         self.assertIn("20F 일반식 (A. 한식)", result["2026-03-02"])
         self.assertEqual(result["2026-03-02"]["20F 일반식 (A. 한식)"], "부대찌개, 현미밥, 배추김치, 계란말이")
+        # 10F 공존 코너 '준비중...' 확인
+        for course in WelstoryCrawler.FLOOR_10_COURSES:
+            self.assertIn(course, result["2026-03-02"])
+            self.assertEqual(result["2026-03-02"][course], WelstoryCrawler.FLOOR_10_PLACEHOLDER)
 
     @patch("welstory_crawler.requests.post")
     def test_fetch_weekly_meal_data_remove_duplicate_first_item(self, mock_post):
@@ -225,6 +229,42 @@ class TestWelstoryCrawler(unittest.TestCase):
         # 데이터 행 확인
         self.assertIn("**20F 일반식 (A. 한식)**", md)
         self.assertIn("부대찌개, 현미밥", md)
+
+    @patch("welstory_crawler.requests.post")
+    def test_fetch_weekly_meal_data_10f_courses(self, mock_post):
+        """10F 공존 코너 3개가 '준비중...'으로 채워지는지 확인"""
+        def side_effect(url, **kwargs):
+            if "search" in url:
+                return make_mock_response(MOCK_RESTAURANT_RESPONSE)
+            elif "meal-times" in url:
+                return make_mock_response(MOCK_MEAL_TIMES_RESPONSE)
+            else:
+                return make_mock_response(MOCK_MEALS_RESPONSE)
+
+        mock_post.side_effect = side_effect
+
+        kst = timezone(timedelta(hours=9))
+        ref_date = datetime(2026, 3, 2, tzinfo=kst)
+        result = self.crawler.fetch_weekly_meal_data(ref_date)
+
+        placeholder = WelstoryCrawler.FLOOR_10_PLACEHOLDER
+        for date_str in result:
+            for course in WelstoryCrawler.FLOOR_10_COURSES:
+                self.assertIn(course, result[date_str])
+                self.assertEqual(result[date_str][course], placeholder)
+
+    def test_convert_to_markdown_includes_10f_placeholder(self):
+        """Markdown 변환 시 10F '준비중...' 포함 확인"""
+        placeholder = WelstoryCrawler.FLOOR_10_PLACEHOLDER
+        courses = WelstoryCrawler.FLOOR_10_COURSES
+        meal_data = {
+            date: {"20F 일반식 (A. 한식)": "메뉴", **{c: placeholder for c in courses}}
+            for date in ["2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06"]
+        }
+        md = self.crawler.convert_to_markdown(meal_data)
+        for course in courses:
+            self.assertIn(f"**{course}**", md)
+        self.assertIn(placeholder, md)
 
     def test_convert_to_markdown_empty(self):
         """빈 데이터 입력 시 안내 메시지 반환"""
