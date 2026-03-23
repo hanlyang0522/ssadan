@@ -29,6 +29,11 @@ jobs:
         pip install -r requirements.txt
 
     - name: Crawl weekly menu from welplan.pmh.codes and save to db/
+      env:
+        MATTERMOST_BASE_URL: ${{ secrets.MATTERMOST_BASE_URL }}
+        MATTERMOST_CHANNEL_ID: ${{ secrets.MATTERMOST_CHANNEL_ID }}
+        MM_LOGIN_JSON: ${{ secrets.MM_LOGIN_JSON }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         cd src
         python main.py crawl --db ../db

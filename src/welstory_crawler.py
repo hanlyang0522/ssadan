@@ -258,6 +258,25 @@ class WelstoryCrawler:
         print(f"✓ Markdown 파일 저장: {file_path}")
         return file_path
 
+    def merge_floor10_data(
+        self,
+        meal_data: Dict[str, Dict[str, str]],
+        floor10_data: Dict[str, Dict[str, str]],
+    ) -> None:
+        """
+        10층 파싱 결과를 meal_data에 병합 (성공한 날짜/코너만 덮어쓰기)
+
+        Args:
+            meal_data: 기존 주간 식단 데이터 (수정됨)
+            floor10_data: 10층 파싱 결과
+        """
+        for date_str, courses in floor10_data.items():
+            if date_str not in meal_data:
+                continue
+            for course, menu in courses.items():
+                if menu and menu != self.FLOOR_10_PLACEHOLDER:
+                    meal_data[date_str][course] = menu
+
     def process_and_save(self, db_path: str = "db") -> Tuple[str, str]:
         """
         welplan.pmh.codes API로 이번 주 식단 조회, Markdown 변환, 파일 저장
