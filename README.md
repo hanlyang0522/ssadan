@@ -50,9 +50,6 @@ MATTERMOST_WEBHOOK_URL=https://your-mattermost-server.com/hooks/xxx
 # Discord Webhook URL (식단 알림용, 선택사항)
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 
-# 오늘의 노래 추천 Mattermost Webhook URL
-MATTERMOST_TODAY_SONG_URL=https://your-mattermost-server.com/hooks/yyy
-
 # 식당 검색어 (기본값: 멀티캠퍼스, 변경 필요 시만 설정)
 # WELSTORY_RESTAURANT_QUERY=멀티캠퍼스
 ```
@@ -81,12 +78,6 @@ cd src
 python main.py daily --date 2026-01-15 --db ../db
 ```
 
-#### 4. 오늘의 노래 추천 요청
-```bash
-cd src
-python main.py song
-```
-
 ### GitHub Actions 자동화
 
 #### 1. GitHub Secrets 설정
@@ -94,7 +85,6 @@ python main.py song
 Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가:
 - `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용, 선택사항)
 - `DISCORD_WEBHOOK_URL`: Discord Webhook URL (식단 알림용, 선택사항)
-- `MATTERMOST_TODAY_SONG_URL`: Mattermost Incoming Webhook URL (오늘의 노래 추천용)
 
 > **참고**: 식단 크롤링은 [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 인증 없이 진행됩니다.
 
