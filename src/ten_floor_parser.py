@@ -83,7 +83,7 @@ def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dic
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash-lite",
+                model="gemini-2.5-flash",
                 contents=[
                     types.Part.from_bytes(data=image_data, mime_type=mime_type),
                     prompt,
