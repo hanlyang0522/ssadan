@@ -1,6 +1,8 @@
 """SSAFY 식단 알림 봇 - CLI 진입점"""
 import argparse
+import os
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
@@ -14,7 +16,8 @@ WEEKDAY_NAMES_KR = ['월', '화', '수', '목', '금', '토', '일']
 
 def crawl_weekly(db_path: str = "db") -> bool:
     """
-    welplan.pmh.codes API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장
+    welplan.pmh.codes API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장.
+    Mattermost에서 10층 식단 이미지도 수집해 병합.
 
     Args:
         db_path: Markdown 파일 저장 경로
@@ -29,15 +32,56 @@ def crawl_weekly(db_path: str = "db") -> bool:
     crawler = WelstoryCrawler()
 
     print("\n1️⃣  주간 식단 조회 중...")
-    markdown, file_path = crawler.process_and_save(db_path)
+    kst = timezone(timedelta(hours=9))
+    today = datetime.now(kst)
+    days_since_monday = today.weekday()
+    monday = today - timedelta(days=days_since_monday)
 
-    if not markdown:
+    meal_data = crawler.fetch_weekly_meal_data(today)
+    if not meal_data or not any(meal_data[d] for d in meal_data):
         print("✗ 식단 크롤링 실패")
         return False
 
-    print(f"✓ 식단 크롤링 완료")
+    print(f"✓ {len(meal_data)}개 날짜의 식단 조회 완료")
+
+    print("\n2️⃣  10층 식단 이미지 수집 중...")
+    _try_fetch_floor10(crawler, meal_data, today)
+
+    print("\n3️⃣  Markdown 변환 및 저장 중...")
+    markdown = crawler.convert_to_markdown(meal_data)
+    monday_str = monday.strftime("%Y-%m-%d")
+    file_path = crawler.save_to_file(markdown, monday_str, db_path)
+
     print(f"✓ 파일 저장: {file_path}")
     return True
+
+
+def _try_fetch_floor10(crawler, meal_data: dict, reference_date) -> None:
+    """
+    Mattermost에서 10층 식단 이미지 수집 후 Gemini로 파싱해 meal_data에 병합.
+    실패 시 경고 로그만 출력하고 계속 진행.
+    """
+    # 필요 환경변수 확인
+    required_vars = ["MATTERMOST_BASE_URL", "MATTERMOST_CHANNEL_ID", "MM_LOGIN_JSON", "GEMINI_API_KEY"]
+    missing = [v for v in required_vars if not os.environ.get(v)]
+    if missing:
+        print(f"⚠️  10층 수집 환경변수 미설정 ({', '.join(missing)}), placeholder 유지")
+        return
+
+    try:
+        from mm_image_fetcher import MattermostImageFetcher
+        from ten_floor_parser import parse_floor10_image
+
+        tmp_dir = tempfile.mkdtemp()
+        fetcher = MattermostImageFetcher()
+        image_path = fetcher.fetch_floor10_image(dest_dir=tmp_dir)
+
+        floor10_data = parse_floor10_image(image_path, reference_date=reference_date)
+        crawler.merge_floor10_data(meal_data, floor10_data)
+        print("✓ 10층 식단 병합 완료")
+    except Exception as e:
+        print(f"⚠️  10층 식단 수집/파싱 실패: {e}")
+        print("   → 10층 placeholder 유지하고 계속 진행합니다.")
 
 
 def send_daily_lunch(date: str = None, db_path: str = "db", dry_run: bool = False) -> bool:

@@ -26,6 +26,8 @@
 ## 작동 방법
 
 1. **식단 크롤링**: 매주 월요일 [welplan.pmh.codes](https://welplan.pmh.codes)에서 멀티캠퍼스 한 주(월~금) 식단을 가져와 `db/yyyy-mm-dd.md` 파일로 저장
+   - 20층 식단: welplan.pmh.codes API 사용
+   - 10층 식단: Mattermost 채널에서 식단 이미지를 자동 수집한 뒤 Gemini API로 파싱해 병합 (실패 시 placeholder 유지)
 2. **일일 알림**: 매일 오전 9시 10분~9시 40분(KST)에 그 날 점심 식단을 Mattermost와 Discord로 전송 (GitHub Actions 스케줄링 지연 최대 30분 발생 가능)
 
 ## 설치
@@ -52,6 +54,12 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 
 # 식당 검색어 (기본값: 멀티캠퍼스, 변경 필요 시만 설정)
 # WELSTORY_RESTAURANT_QUERY=멀티캠퍼스
+
+# 10층 식단 이미지 자동 수집 (선택사항, 미설정 시 placeholder 유지)
+MATTERMOST_BASE_URL=https://your-mattermost-server.com
+MATTERMOST_CHANNEL_ID=your-channel-id
+MM_LOGIN_JSON={"login_id": "your-email@example.com", "password": "your-password"}
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 **참고**: `MATTERMOST_WEBHOOK_URL` 또는 `DISCORD_WEBHOOK_URL` 중 최소 하나는 설정되어야 합니다.
@@ -85,8 +93,12 @@ python main.py daily --date 2026-01-15 --db ../db
 Repository Settings > Secrets and variables > Actions에서 다음 Secret 추가:
 - `MATTERMOST_WEBHOOK_URL`: Mattermost Incoming Webhook URL (식단 알림용, 선택사항)
 - `DISCORD_WEBHOOK_URL`: Discord Webhook URL (식단 알림용, 선택사항)
+- `MATTERMOST_BASE_URL`: Mattermost 서버 URL (10층 이미지 수집용, 선택사항)
+- `MATTERMOST_CHANNEL_ID`: 10층 식단 이미지가 올라오는 채널 ID (선택사항)
+- `MM_LOGIN_JSON`: Mattermost 로그인 정보 JSON, 예: `{"login_id":"user@example.com","password":"pass"}` (선택사항)
+- `GEMINI_API_KEY`: Google Gemini API 키 (10층 이미지 파싱용, 선택사항)
 
-> **참고**: 식단 크롤링은 [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 인증 없이 진행됩니다.
+> **참고**: 10층 관련 Secret이 없으면 10층 식단은 placeholder로 표시됩니다. 식단 크롤링은 [welplan.pmh.codes](https://welplan.pmh.codes)를 통해 인증 없이 진행됩니다.
 
 #### 2. 주간 식단 크롤링
 

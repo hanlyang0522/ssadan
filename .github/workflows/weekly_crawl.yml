@@ -29,6 +29,11 @@ jobs:
         pip install -r requirements.txt
 
     - name: Crawl weekly menu from welplan.pmh.codes and save to db/
+      env:
+        MATTERMOST_BASE_URL: ${{ secrets.MATTERMOST_BASE_URL }}
+        MATTERMOST_CHANNEL_ID: ${{ secrets.MATTERMOST_CHANNEL_ID }}
+        MM_LOGIN_JSON: ${{ secrets.MM_LOGIN_JSON }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       run: |
         cd src
         python main.py crawl --db ../db
@@ -41,7 +46,7 @@ jobs:
         if find db -name '*.md' -type f | grep -q .; then
           git add db/*.md
           git diff --staged --quiet || git commit -m "Add weekly menu markdown [skip ci]"
-          git pull --rebase origin HEAD
+          git pull --rebase origin "${{ github.ref_name }}"
           git push
           echo "✓ Markdown 파일이 커밋되고 푸시되었습니다."
         else
