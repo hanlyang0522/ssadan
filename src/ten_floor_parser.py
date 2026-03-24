@@ -10,20 +10,35 @@ from google.genai import types
 FLOOR_10_COURSES = ["10F 공존 (도시락)", "10F 공존 (브런치)", "10F 공존 (샐러드)"]
 KST = timezone(timedelta(hours=9))
 
-_PARSE_PROMPT = """이 이미지는 SSAFY 멀티캠퍼스 10층 공존 식당의 주간 식단표입니다.
-아래 형식으로 월요일부터 금요일까지 각 날짜의 메뉴를 추출해 주세요.
+_WEEKDAY_NAMES = ["월", "화", "수", "목", "금"]
 
-출력 형식 (각 줄):
-날짜(YYYY-MM-DD)|코너|메뉴내용
 
-코너는 반드시 다음 세 가지 중 하나:
-- 10F 공존 (도시락)
-- 10F 공존 (브런치)
-- 10F 공존 (샐러드)
+def _build_prompt(reference_date: datetime = None) -> str:
+    """이번 주 날짜를 포함한 Markdown 테이블 템플릿 프롬프트 생성"""
+    monday = _get_monday(reference_date)
+    dates = [monday + timedelta(days=i) for i in range(5)]
 
-메뉴 항목은 " & " 또는 ", "로 구분하세요.
-이미지에서 날짜를 확인할 수 없는 경우 날짜를 비워 두세요(|코너|메뉴).
-다른 설명 없이 위 형식의 텍스트만 출력하세요."""
+    header_dates = " | ".join(
+        f"{d.strftime('%m월 %d일')} ({_WEEKDAY_NAMES[i]})" for i, d in enumerate(dates)
+    )
+    template = (
+        f"| 구분 | {header_dates} |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        "| **10F 공존 (도시락)** | ? | ? | ? | ? | ? |\n"
+        "| **10F 공존 (브런치)** | ? | ? | ? | ? | ? |\n"
+        "| **10F 공존 (샐러드)** | ? | ? | ? | ? | ? |"
+    )
+
+    return (
+        "제공된 이미지에서 식단표에서 메뉴 추출해서 아래 테이블표 형식에 맞춰 이번주 식단표 만들어줘.\n\n"
+        f"{template}\n\n"
+        "출력 규칙:\n"
+        "- 위 테이블에서 ? 부분만 실제 메뉴로 채워서 동일한 Markdown 테이블 형식으로 출력하세요.\n"
+        "- 도시락 메뉴 항목은 쉼표(,)로 구분하세요.\n"
+        "- 브런치/샐러드 메뉴 항목은 & 로 구분하세요.\n"
+        "- 이미지에서 해당 날짜/코너의 메뉴가 없으면 - 로 표시하세요.\n"
+        "- 다른 설명 없이 Markdown 테이블만 출력하세요."
+    )
 
 
 def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dict[str, Dict[str, str]]:
@@ -53,11 +68,13 @@ def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dic
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
     mime_type = mime_map.get(ext, "image/jpeg")
 
+    prompt = _build_prompt(reference_date)
+
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         contents=[
             types.Part.from_bytes(data=image_data, mime_type=mime_type),
-            _PARSE_PROMPT,
+            prompt,
         ],
     )
 
@@ -74,43 +91,39 @@ def _get_monday(reference: datetime = None) -> datetime:
 
 
 def _parse_response(text: str, reference_date: datetime = None) -> Dict[str, Dict[str, str]]:
-    """Gemini 응답 텍스트를 파싱하여 구조화된 데이터 반환"""
+    """Gemini Markdown 테이블 응답을 파싱하여 구조화된 데이터 반환"""
     monday = _get_monday(reference_date)
-    # 월~금 날짜 목록
     week_dates = [(monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(5)]
 
     result: Dict[str, Dict[str, str]] = {}
 
     for line in text.splitlines():
         line = line.strip()
-        if not line or "|" not in line:
+        # 구분자 행 또는 헤더 행 건너뜀
+        if not line.startswith("|") or ":---" in line or "구분" in line:
             continue
 
-        parts = line.split("|")
-        if len(parts) < 3:
+        cols = [c.strip() for c in line.split("|")]
+        # 앞뒤 빈 요소 제거 (split 결과 양끝 "")
+        cols = [c for c in cols if c != ""]
+
+        if len(cols) < 6:
             continue
 
-        date_str, course, menu = parts[0].strip(), parts[1].strip(), parts[2].strip()
-
-        # 날짜가 없으면 스킵 (매핑 불가)
-        if not date_str or not course or not menu:
-            continue
-
-        # 날짜 형식 검증
-        try:
-            datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            continue
-
-        if date_str not in week_dates:
-            continue
-
+        # 첫 번째 컬럼에서 코너명 추출 (**...** 마커 제거)
+        course = cols[0].replace("**", "").strip()
         if course not in FLOOR_10_COURSES:
             continue
 
-        if date_str not in result:
-            result[date_str] = {}
-        result[date_str][course] = menu
+        # 날짜별 메뉴 매핑
+        for i, date_str in enumerate(week_dates):
+            if i + 1 >= len(cols):
+                break
+            menu = cols[i + 1].strip()
+            if menu and menu != "-":
+                if date_str not in result:
+                    result[date_str] = {}
+                result[date_str][course] = menu
 
     if not result:
         raise ValueError(
