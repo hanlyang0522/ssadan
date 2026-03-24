@@ -41,9 +41,13 @@ def _build_prompt(reference_date: datetime = None) -> str:
     )
 
 
+_MAX_RETRIES = 10
+
+
 def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dict[str, Dict[str, str]]:
     """
-    Gemini API로 10층 식단 이미지를 파싱
+    Gemini API로 10층 식단 이미지를 파싱.
+    파싱 결과에 미완성 항목이 있으면 최대 10회까지 재시도하며 성공 항목을 누적.
 
     Args:
         image_path: 이미지 파일 경로
@@ -69,17 +73,53 @@ def parse_floor10_image(image_path: str, reference_date: datetime = None) -> Dic
     mime_type = mime_map.get(ext, "image/jpeg")
 
     prompt = _build_prompt(reference_date)
+    monday = _get_monday(reference_date)
+    week_dates = [(monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(5)]
+    # 파싱 성공 기준: 모든 날짜 × 모든 코너가 채워진 경우
+    total_expected = len(week_dates) * len(FLOOR_10_COURSES)
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=[
-            types.Part.from_bytes(data=image_data, mime_type=mime_type),
-            prompt,
-        ],
-    )
+    accumulated: Dict[str, Dict[str, str]] = {}
 
-    text = response.text.strip()
-    return _parse_response(text, reference_date)
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=[
+                    types.Part.from_bytes(data=image_data, mime_type=mime_type),
+                    prompt,
+                ],
+            )
+            text = response.text.strip()
+            parsed = _parse_response(text, reference_date)
+
+            # 새로 파싱된 결과를 누적 (기존 성공 항목은 유지)
+            for date_str, courses in parsed.items():
+                if date_str not in accumulated:
+                    accumulated[date_str] = {}
+                for course, menu in courses.items():
+                    if course not in accumulated[date_str]:
+                        accumulated[date_str][course] = menu
+
+        except ValueError:
+            pass  # 파싱 실패 시 누적 결과 그대로 유지
+
+        # 모든 항목이 채워졌는지 확인
+        filled = sum(
+            len(accumulated.get(d, {})) for d in week_dates
+        )
+        remaining = total_expected - filled
+        if remaining == 0:
+            if attempt > 1:
+                print(f"✓ {attempt}회 시도 후 모든 10층 식단 파싱 완료")
+            break
+
+        if attempt < _MAX_RETRIES:
+            print(f"⚠️  미완성 항목 {remaining}개, retry {attempt}/{_MAX_RETRIES}...")
+
+    if not accumulated:
+        raise ValueError("Gemini 파싱 실패: 최대 재시도 횟수 초과 후에도 유효한 데이터 없음")
+
+    return accumulated
 
 
 def _get_monday(reference: datetime = None) -> datetime:
