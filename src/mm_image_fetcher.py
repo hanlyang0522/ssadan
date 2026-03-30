@@ -2,9 +2,12 @@
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
+
+KST = timezone(timedelta(hours=9))
 
 
 class MattermostImageFetcher:
@@ -49,6 +52,16 @@ class MattermostImageFetcher:
         """이미지 파일 여부 확인 (png/jpg/jpeg)"""
         return filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg"}
 
+    def _is_post_this_week(self, post: dict) -> bool:
+        """게시글 업로드 시각(create_at)이 이번 주(월~금, KST 기준)인지 확인"""
+        create_at_ms = post.get("create_at", 0)
+        post_date = datetime.fromtimestamp(create_at_ms / 1000, tz=KST)
+        today = datetime.now(KST)
+        days_since_monday = today.weekday()
+        monday = (today - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        friday = (monday + timedelta(days=4)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        return monday <= post_date <= friday
+
     def _get_file_info(self, file_id: str) -> dict:
         """파일 메타데이터 조회"""
         resp = self.session.get(
@@ -91,6 +104,10 @@ class MattermostImageFetcher:
             file_ids = post.get("file_ids") or []
             post_message = post.get("message", "")
 
+            if not self._is_post_this_week(post):
+                print(f"⏭️  이번 주 게시글이 아님, 건너뜀 (create_at: {post.get('create_at')})")
+                continue
+
             for file_id in file_ids:
                 try:
                     info = self._get_file_info(file_id)
@@ -113,9 +130,13 @@ class MattermostImageFetcher:
                     print(f"✓ 10층 식단 이미지 다운로드: {dest_path}")
                     return dest_path
 
-        # 키워드 매칭 실패 시 최신 이미지로 fallback
+        # 키워드 매칭 실패 시 이번 주 최신 이미지로 fallback
         for post in posts:
             file_ids = post.get("file_ids") or []
+
+            if not self._is_post_this_week(post):
+                continue
+
             for file_id in file_ids:
                 try:
                     info = self._get_file_info(file_id)
