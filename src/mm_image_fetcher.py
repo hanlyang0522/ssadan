@@ -1,7 +1,6 @@
 """Mattermost 로그인/이미지 다운로드 모듈"""
 import json
 import os
-import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -53,30 +52,15 @@ class MattermostImageFetcher:
         """이미지 파일 여부 확인 (png/jpg/jpeg)"""
         return filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg"}
 
-    def _is_this_week(self, filename: str) -> bool:
-        """파일명에서 날짜를 추출해 이번 주(월~금, KST 기준) 이미지인지 확인. 날짜를 알 수 없으면 True 반환"""
-        # YYYYMMDD 또는 YYYY-MM-DD / YYYY_MM_DD 패턴 추출
-        patterns = [
-            r"(\d{4})[-_](\d{2})[-_](\d{2})",  # YYYY-MM-DD, YYYY_MM_DD
-            r"(\d{4})(\d{2})(\d{2})",            # YYYYMMDD
-        ]
-        for pattern in patterns:
-            m = re.search(pattern, filename)
-            if m:
-                try:
-                    file_date = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=KST)
-                    today = datetime.now(KST)
-                    days_since_monday = today.weekday()
-                    monday = today - timedelta(days=days_since_monday)
-                    friday = monday + timedelta(days=4)
-                    monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
-                    friday = friday.replace(hour=23, minute=59, second=59, microsecond=999999)
-                    return monday <= file_date <= friday
-                except ValueError:
-                    continue
-        # 날짜 정보가 없으면 이번 주로 간주 (파일명에 날짜가 없는 경우)
-        print(f"⚠️  파일명에서 날짜를 인식할 수 없음, 이번 주로 간주: {filename}")
-        return True
+    def _is_post_this_week(self, post: dict) -> bool:
+        """게시글 업로드 시각(create_at)이 이번 주(월~금, KST 기준)인지 확인"""
+        create_at_ms = post.get("create_at", 0)
+        post_date = datetime.fromtimestamp(create_at_ms / 1000, tz=KST)
+        today = datetime.now(KST)
+        days_since_monday = today.weekday()
+        monday = (today - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        friday = (monday + timedelta(days=4)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        return monday <= post_date <= friday
 
     def _get_file_info(self, file_id: str) -> dict:
         """파일 메타데이터 조회"""
@@ -120,6 +104,10 @@ class MattermostImageFetcher:
             file_ids = post.get("file_ids") or []
             post_message = post.get("message", "")
 
+            if not self._is_post_this_week(post):
+                print(f"⏭️  이번 주 게시글이 아님, 건너뜀 (create_at: {post.get('create_at')})")
+                continue
+
             for file_id in file_ids:
                 try:
                     info = self._get_file_info(file_id)
@@ -128,10 +116,6 @@ class MattermostImageFetcher:
 
                 filename = info.get("name", "")
                 if not self._is_image_file(filename):
-                    continue
-
-                if not self._is_this_week(filename):
-                    print(f"⏭️  이번 주 이미지가 아님, 건너뜀: {filename}")
                     continue
 
                 # 파일명이나 게시글 본문에서 10층/공존 키워드 확인
@@ -149,6 +133,10 @@ class MattermostImageFetcher:
         # 키워드 매칭 실패 시 이번 주 최신 이미지로 fallback
         for post in posts:
             file_ids = post.get("file_ids") or []
+
+            if not self._is_post_this_week(post):
+                continue
+
             for file_id in file_ids:
                 try:
                     info = self._get_file_info(file_id)
@@ -157,10 +145,6 @@ class MattermostImageFetcher:
 
                 filename = info.get("name", "")
                 if not self._is_image_file(filename):
-                    continue
-
-                if not self._is_this_week(filename):
-                    print(f"⏭️  이번 주 이미지가 아님, 건너뜀: {filename}")
                     continue
 
                 save_dir = dest_dir or tempfile.gettempdir()
