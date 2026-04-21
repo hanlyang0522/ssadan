@@ -28,8 +28,10 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Crawl weekly menu from welplan.pmh.codes and save to db/
+    - name: Crawl weekly menu from Welstory Plus API and save to db/
       env:
+        WELSTORY_USERNAME: ${{ secrets.WELSTORY_USERNAME }}
+        WELSTORY_PASSWORD: ${{ secrets.WELSTORY_PASSWORD }}
         MATTERMOST_BASE_URL: ${{ secrets.MATTERMOST_BASE_URL }}
         MATTERMOST_CHANNEL_ID: ${{ secrets.MATTERMOST_CHANNEL_ID }}
         MM_LOGIN_JSON: ${{ secrets.MM_LOGIN_JSON }}

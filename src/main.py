@@ -16,7 +16,7 @@ WEEKDAY_NAMES_KR = ['월', '화', '수', '목', '금', '토', '일']
 
 def crawl_weekly(db_path: str = "db") -> bool:
     """
-    welplan.pmh.codes API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장.
+    Welstory Plus API에서 이번 주 식단 데이터를 가져와 Markdown 파일로 저장.
     Mattermost에서 10층 식단 이미지도 수집해 병합.
 
     Args:
@@ -26,7 +26,7 @@ def crawl_weekly(db_path: str = "db") -> bool:
         성공 여부
     """
     print("=" * 60)
-    print("🔄 welplan.pmh.codes API 식단 크롤링 시작")
+    print("🔄 Welstory Plus API 식단 크롤링 시작")
     print("=" * 60)
 
     crawler = WelstoryCrawler()
