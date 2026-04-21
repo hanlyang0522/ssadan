@@ -1,14 +1,15 @@
-"""웰스토리 식단 데이터 크롤링 및 Markdown 변환 (welplan.pmh.codes API 사용)"""
+"""웰스토리 식단 데이터 크롤링 및 Markdown 변환 (Welstory Plus API 직접 사용)"""
 import requests
 import os
+import uuid
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
 
 class WelstoryCrawler:
-    """welplan.pmh.codes API를 통한 멀티캠퍼스 식단 데이터 크롤링 (인증 불필요)"""
+    """Welstory Plus API를 통한 멀티캠퍼스 식단 데이터 크롤링"""
 
-    WELPLAN_BASE_URL = "https://welplan.pmh.codes"
+    WELSTORY_BASE_URL = "https://welplus.welstory.com"
     DEFAULT_RESTAURANT_QUERY = "멀티캠퍼스"
     FLOOR_10_COURSES = ["10F 공존 (도시락)", "10F 공존 (브런치)", "10F 공존 (샐러드)"]
     FLOOR_10_PLACEHOLDER = "준비중..."
@@ -17,20 +18,79 @@ class WelstoryCrawler:
         self.restaurant_query = os.getenv(
             "WELSTORY_RESTAURANT_QUERY", self.DEFAULT_RESTAURANT_QUERY
         )
+        self.username = os.getenv("WELSTORY_USERNAME", "")
+        self.password = os.getenv("WELSTORY_PASSWORD", "")
+        self.device_id = os.getenv("WELSTORY_DEVICE_ID", str(uuid.uuid4()))
+        self._token: Optional[str] = None
 
-    def _search_restaurant(self) -> Optional[dict]:
-        """식당 검색 후 식당 데이터 반환"""
-        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/search"
+    def _login(self) -> Optional[str]:
+        """Welstory Plus 로그인 후 JWT 토큰 반환"""
+        if not self.username or not self.password:
+            print("✗ WELSTORY_USERNAME / WELSTORY_PASSWORD 환경변수가 설정되지 않았습니다.")
+            return None
+        url = f"{self.WELSTORY_BASE_URL}/login"
         try:
             response = requests.post(
                 url,
-                json={"searchQuery": self.restaurant_query},
+                data={
+                    "username": self.username,
+                    "password": self.password,
+                    "remember-me": "false",
+                },
+                headers={
+                    "User-Agent": "Welplus",
+                    "X-Device-Id": self.device_id,
+                    "X-Autologin": "N",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                timeout=30,
+                allow_redirects=False,
+            )
+            if response.status_code == 200:
+                token = response.headers.get("Authorization")
+                if token:
+                    self._token = token
+                    return token
+                print("✗ 로그인 응답에 Authorization 헤더가 없습니다.")
+                return None
+            else:
+                print(f"✗ 로그인 실패: HTTP {response.status_code}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"✗ 로그인 오류: {str(e)}")
+            return None
+
+    def _get_token(self) -> Optional[str]:
+        """JWT 토큰 반환 (없으면 로그인)"""
+        if self._token:
+            return self._token
+        return self._login()
+
+    def _auth_headers(self) -> Dict[str, str]:
+        """인증 헤더 반환"""
+        return {
+            "User-Agent": "Welplus",
+            "X-Device-Id": self.device_id,
+            "Authorization": self._token or "",
+        }
+
+    def _search_restaurant(self) -> Optional[dict]:
+        """식당 검색 후 식당 데이터 반환"""
+        if not self._get_token():
+            return None
+        url = f"{self.WELSTORY_BASE_URL}/api/mypage/rest-list"
+        try:
+            response = requests.get(
+                url,
+                params={"restaurantName": self.restaurant_query},
+                headers=self._auth_headers(),
                 timeout=30,
             )
             if response.status_code == 200:
-                restaurants = response.json().get("restaurants", [])
-                if restaurants:
-                    print(f"✓ 식당 검색 성공: {restaurants[0]['name']}")
+                data = response.json()
+                restaurants = data.get("data", data) if isinstance(data, dict) else data
+                if isinstance(restaurants, list) and restaurants:
+                    print(f"✓ 식당 검색 성공: {restaurants[0]['restaurantName']}")
                     return restaurants[0]
                 print(f"✗ '{self.restaurant_query}' 식당을 찾을 수 없습니다.")
                 return None
@@ -43,25 +103,27 @@ class WelstoryCrawler:
 
     def _get_lunch_meal_time_id(self, restaurant_data: dict) -> Optional[str]:
         """점심 식사 시간 ID 조회"""
-        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/meal-times"
+        if not self._get_token():
+            return None
+        restaurant_id = restaurant_data.get("restaurantId", "")
+        url = f"{self.WELSTORY_BASE_URL}/api/menu/getMealTimeList"
         try:
-            response = requests.post(
-                url,
-                json={"restaurantData": restaurant_data},
-                timeout=30,
-            )
+            headers = {**self._auth_headers(), "Cookie": f"cafeteriaActiveId={restaurant_id}"}
+            response = requests.get(url, headers=headers, timeout=30)
             if response.status_code == 200:
-                meal_times = response.json().get("mealTimes", [])
-                for mt in meal_times:
-                    name = mt.get("name", "")
-                    if any(kw in name for kw in ["중식", "점심", "Lunch"]):
-                        print(f"✓ 점심 식사 시간: {name} (ID: {mt['id']})")
-                        return mt["id"]
-                # 점심 키워드를 찾지 못하면 첫 번째 사용
-                if meal_times:
-                    first = meal_times[0]
-                    print(f"⚠️  점심 식사 시간 미확인, 첫 번째 사용: {first['name']}")
-                    return first["id"]
+                data = response.json()
+                meal_times = data.get("data", data) if isinstance(data, dict) else data
+                if isinstance(meal_times, list):
+                    for mt in meal_times:
+                        name = mt.get("codeNm", "")
+                        if any(kw in name for kw in ["중식", "점심", "Lunch"]):
+                            print(f"✓ 점심 식사 시간: {name} (ID: {mt['code']})")
+                            return mt["code"]
+                    # 점심 키워드를 찾지 못하면 첫 번째 사용
+                    if meal_times:
+                        first = meal_times[0]
+                        print(f"⚠️  점심 식사 시간 미확인, 첫 번째 사용: {first['codeNm']}")
+                        return first["code"]
                 print("✗ 식사 시간 정보가 없습니다.")
                 return None
             else:
@@ -75,19 +137,25 @@ class WelstoryCrawler:
         self, date: datetime, restaurant_data: dict, meal_time_id: str
     ) -> List[dict]:
         """특정 날짜의 점심 식단 목록 조회"""
-        url = f"{self.WELPLAN_BASE_URL}/api/restaurants/meals"
+        if not self._get_token():
+            return []
+        restaurant_id = restaurant_data.get("restaurantId", "")
+        url = f"{self.WELSTORY_BASE_URL}/api/meal"
         try:
-            response = requests.post(
+            response = requests.get(
                 url,
-                json={
-                    "restaurantData": restaurant_data,
-                    "date": date.strftime("%Y%m%d"),
-                    "mealTimeId": meal_time_id,
+                params={
+                    "menuDt": date.strftime("%Y%m%d"),
+                    "menuMealType": meal_time_id,
+                    "restaurantCode": restaurant_id,
                 },
+                headers=self._auth_headers(),
                 timeout=30,
             )
             if response.status_code == 200:
-                return response.json().get("meals", [])
+                data = response.json()
+                wrapper = data.get("data", {}) if isinstance(data, dict) else {}
+                return wrapper.get("mealList", [])
             else:
                 print(
                     f"⚠️  {date.strftime('%Y-%m-%d')} 식단 조회 실패: HTTP {response.status_code}"
@@ -137,50 +205,32 @@ class WelstoryCrawler:
             print(f"  📡 {date_str} 식단 조회 중...")
             meal_list = self.fetch_daily_meal_list(day, restaurant_data, meal_time_id)
 
-            for meal in meal_list:
-                # welplan API: menuCourseName = 코너명(courseTxt), name = 메뉴명(menuName)
-                course_name = meal.get("menuCourseName", "").strip()
+            # Welstory API: 코너별 요리를 개별 dish로 반환 → courseTxt 기준으로 그룹화
+            courses: Dict[str, List[dict]] = {}
+            for dish in meal_list:
+                course_name = dish.get("courseTxt", "").strip()
                 if not course_name:
                     continue
+                courses.setdefault(course_name, []).append(dish)
 
-                menu_name = meal.get("name", "").strip()
-                sub_menu_txt = meal.get("subMenuTxt") or ""
-                sub_menu_txt = sub_menu_txt.strip()
-
-                meal_data[date_str][course_name] = self._merge_menu_parts(
-                    menu_name,
-                    sub_menu_txt,
-                )
+            for course_name, dishes in courses.items():
+                # 대표 메뉴(typicalMenu='Y')를 앞에 배치
+                main = [d for d in dishes if d.get("typicalMenu") == "Y"]
+                side = [d for d in dishes if d.get("typicalMenu") != "Y"]
+                menu_names: List[str] = []
+                seen: set = set()
+                for dish in main + side:
+                    name = dish.get("menuName", "").strip()
+                    if name and name not in seen:
+                        menu_names.append(name)
+                        seen.add(name)
+                meal_data[date_str][course_name] = ", ".join(menu_names)
 
             # 10F 공존 코너는 API 미제공으로 '준비중...' 처리
             for course in self.FLOOR_10_COURSES:
                 meal_data[date_str][course] = self.FLOOR_10_PLACEHOLDER
 
         return meal_data
-
-    @staticmethod
-    def _merge_menu_parts(menu_name: str, sub_menu_txt: str) -> str:
-        """메뉴명과 서브메뉴를 순서대로 병합하고 중복 항목 제거"""
-        parts: List[str] = []
-
-        if menu_name:
-            parts.append(menu_name)
-
-        if sub_menu_txt:
-            parts.extend(
-                item.strip()
-                for item in sub_menu_txt.split(",")
-                if item.strip()
-            )
-
-        unique_parts: List[str] = []
-        seen = set()
-        for part in parts:
-            if part not in seen:
-                unique_parts.append(part)
-                seen.add(part)
-
-        return ", ".join(unique_parts)
 
     def convert_to_markdown(self, meal_data: Dict[str, Dict[str, str]]) -> str:
         """
@@ -279,7 +329,7 @@ class WelstoryCrawler:
 
     def process_and_save(self, db_path: str = "db") -> Tuple[str, str]:
         """
-        welplan.pmh.codes API로 이번 주 식단 조회, Markdown 변환, 파일 저장
+        Welstory Plus API로 이번 주 식단 조회, Markdown 변환, 파일 저장
 
         Returns:
             (markdown_content, file_path) 튜플. 실패 시 ("", "")
