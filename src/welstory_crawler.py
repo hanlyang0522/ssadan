@@ -2,6 +2,7 @@
 import requests
 import os
 import uuid
+import re
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
@@ -13,6 +14,9 @@ class WelstoryCrawler:
     DEFAULT_RESTAURANT_QUERY = "멀티캠퍼스"
     FLOOR_10_COURSES = ["10F 공존 (도시락)", "10F 공존 (브런치)", "10F 공존 (샐러드)"]
     FLOOR_10_PLACEHOLDER = "준비중..."
+
+    # 메뉴 문자열 분리에 사용하는 공통 구분자
+    MENU_SPLIT_PATTERN = re.compile(r"\s*<br\s*/?>\s*|\s*[,/\n]\s*", re.IGNORECASE)
 
     def __init__(self):
         self.restaurant_query = os.getenv(
@@ -205,44 +209,97 @@ class WelstoryCrawler:
             print(f"  📡 {date_str} 식단 조회 중...")
             meal_list = self.fetch_daily_meal_list(day, restaurant_data, meal_time_id)
 
-            # Welstory API: hallNo + menuCourseType로 코너 구분
-            # (courseTxt 기준 그룹화 시 사이드 메뉴가 누락될 수 있음)
-            courses: Dict[Tuple[str, str], List[dict]] = {}
+            # Welstory 응답 구조 변동(평면/중첩)에 대응해 코너별 메뉴를 수집
+            # 기존 hallNo + menuCourseType 기준 필터링은 서브 메뉴를 누락시킬 수 있다.
             for dish in meal_list:
-                hall_no = dish.get("hallNo", "")
-                course_type = dish.get("menuCourseType", "")
-                if not hall_no or not course_type:
-                    continue
-                courses.setdefault((hall_no, course_type), []).append(dish)
-
-            for dishes in courses.values():
-                if not dishes:
-                    continue
-                # 대표 메뉴(typicalMenu='Y')에서 코너 표시명 가져오기
-                main_dish = next(
-                    (d for d in dishes if d.get("typicalMenu") == "Y"), dishes[0]
-                )
-                course_name = main_dish.get("courseTxt", "").strip()
+                course_name = self._extract_course_name(dish)
                 if not course_name:
                     continue
 
-                # 대표 메뉴를 앞에 배치
-                main = [d for d in dishes if d.get("typicalMenu") == "Y"]
-                side = [d for d in dishes if d.get("typicalMenu") != "Y"]
-                menu_names: List[str] = []
-                seen: set = set()
-                for dish in main + side:
-                    name = dish.get("menuName", "").strip()
-                    if name and name not in seen:
-                        menu_names.append(name)
-                        seen.add(name)
-                meal_data[date_str][course_name] = ", ".join(menu_names)
+                menu_names = self._extract_menu_names(dish)
+                if not menu_names:
+                    continue
+
+                existing = meal_data[date_str].get(course_name, "")
+                existing_names = [m.strip() for m in existing.split(",") if m.strip()]
+                merged_names = self._merge_unique(existing_names, menu_names)
+                meal_data[date_str][course_name] = ", ".join(merged_names)
 
             # 10F 공존 코너는 API 미제공으로 '준비중...' 처리
             for course in self.FLOOR_10_COURSES:
                 meal_data[date_str][course] = self.FLOOR_10_PLACEHOLDER
 
         return meal_data
+
+    def _extract_course_name(self, dish: dict) -> str:
+        """Welstory 항목에서 코너명 후보를 순서대로 추출"""
+        candidates = [
+            dish.get("courseTxt", ""),
+            dish.get("menuCourseNm", ""),
+            dish.get("menuCourseName", ""),
+            dish.get("cornerNm", ""),
+            dish.get("cornerName", ""),
+        ]
+        for name in candidates:
+            normalized = str(name).strip()
+            if normalized:
+                return normalized
+        return ""
+
+    def _extract_menu_names(self, dish: dict) -> List[str]:
+        """Welstory 항목에서 메뉴명을 최대한 수집"""
+        names: List[str] = []
+
+        # 1) 대표/단일 메뉴 필드
+        for key in ["menuName", "menuNm", "mainMenuName", "menu"]:
+            value = dish.get(key)
+            if isinstance(value, str):
+                names.extend(self._split_menu_text(value))
+
+        # 2) 문자열로 합쳐진 서브 메뉴 필드
+        for key in ["subMenuTxt", "subMenuText", "menuText", "menuDesc", "menuDescription"]:
+            value = dish.get(key)
+            if isinstance(value, str):
+                names.extend(self._split_menu_text(value))
+
+        # 3) 중첩 리스트 필드 (응답 구조 변경 대응)
+        list_keys = ["menuList", "subMenuList", "menuNmList", "menuInfoList", "items"]
+        for list_key in list_keys:
+            nested = dish.get(list_key)
+            if not isinstance(nested, list):
+                continue
+            for item in nested:
+                if isinstance(item, str):
+                    names.extend(self._split_menu_text(item))
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                for key in ["menuName", "menuNm", "name", "menu"]:
+                    value = item.get(key)
+                    if isinstance(value, str):
+                        names.extend(self._split_menu_text(value))
+
+        return self._merge_unique([], names)
+
+    def _split_menu_text(self, text: str) -> List[str]:
+        """합쳐진 메뉴 문자열을 개별 메뉴로 분리"""
+        raw = text.strip()
+        if not raw:
+            return []
+        parts = self.MENU_SPLIT_PATTERN.split(raw)
+        return [p.strip() for p in parts if p and p.strip()]
+
+    def _merge_unique(self, existing: List[str], incoming: List[str]) -> List[str]:
+        """기존 순서를 유지하며 중복 없이 메뉴 병합"""
+        merged: List[str] = []
+        seen = set()
+        for name in existing + incoming:
+            normalized = name.strip()
+            if not normalized or normalized in seen:
+                continue
+            merged.append(normalized)
+            seen.add(normalized)
+        return merged
 
     def convert_to_markdown(self, meal_data: Dict[str, Dict[str, str]]) -> str:
         """
