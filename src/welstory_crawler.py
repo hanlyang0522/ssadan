@@ -205,16 +205,28 @@ class WelstoryCrawler:
             print(f"  📡 {date_str} 식단 조회 중...")
             meal_list = self.fetch_daily_meal_list(day, restaurant_data, meal_time_id)
 
-            # Welstory API: 코너별 요리를 개별 dish로 반환 → courseTxt 기준으로 그룹화
-            courses: Dict[str, List[dict]] = {}
+            # Welstory API: hallNo + menuCourseType로 코너 구분
+            # (courseTxt 기준 그룹화 시 사이드 메뉴가 누락될 수 있음)
+            courses: Dict[Tuple[str, str], List[dict]] = {}
             for dish in meal_list:
-                course_name = dish.get("courseTxt", "").strip()
+                hall_no = dish.get("hallNo", "")
+                course_type = dish.get("menuCourseType", "")
+                if not hall_no or not course_type:
+                    continue
+                courses.setdefault((hall_no, course_type), []).append(dish)
+
+            for dishes in courses.values():
+                if not dishes:
+                    continue
+                # 대표 메뉴(typicalMenu='Y')에서 코너 표시명 가져오기
+                main_dish = next(
+                    (d for d in dishes if d.get("typicalMenu") == "Y"), dishes[0]
+                )
+                course_name = main_dish.get("courseTxt", "").strip()
                 if not course_name:
                     continue
-                courses.setdefault(course_name, []).append(dish)
 
-            for course_name, dishes in courses.items():
-                # 대표 메뉴(typicalMenu='Y')를 앞에 배치
+                # 대표 메뉴를 앞에 배치
                 main = [d for d in dishes if d.get("typicalMenu") == "Y"]
                 side = [d for d in dishes if d.get("typicalMenu") != "Y"]
                 menu_names: List[str] = []
