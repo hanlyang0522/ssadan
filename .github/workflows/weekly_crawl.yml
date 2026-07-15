@@ -1,12 +1,6 @@
 name: Weekly Menu Crawl (Wellstory API)
 
 on:
-  schedule:
-    # 매주 월요일 오전 8시 (KST = UTC+9) 목표
-    # GitHub Actions 스케줄링 지연(~30분)을 고려하여 7시 50분에 예약
-    # UTC 기준 일요일 22시 50분 = KST 월요일 7시 50분
-    # 실제 실행 시간: ~8시 KST
-    - cron: '50 22 * * 0'
   workflow_dispatch:  # 수동 실행 가능
 
 jobs:
